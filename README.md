@@ -23,7 +23,9 @@ Almoxarifado PBA/
 ├── css/styles.css              # tema escuro, botões grandes para uso com luva
 ├── js/app.js                   # banco SQLite, telas, scanner, import/export
 ├── js/nuvem.js                 # cliente do Supabase (sincronização)
-├── js/config.js                # URL + chave anon da nuvem (preencher uma vez)
+├── js/auth.js                  # login, senhas e criptografia do cofre
+├── js/usuarios.js              # COFRE: usuários + URL/chave cifrados (gerado)
+├── admin.html                  # painel que gera o js/usuarios.js
 ├── supabase.sql                # script para criar as tabelas na nuvem
 ├── vendor/
 │   ├── sql-wasm.js             # sql.js 1.10.3
@@ -91,20 +93,17 @@ Sem isso, **cada aparelho tem o próprio estoque**. Com isso, todos veem o mesmo
    - **Project URL** → algo como `https://abcdefgh.supabase.co`
    - chave **anon** / **public** → a chave longa que começa com `eyJ...`
    - ⚠️ nunca use a **service_role** (é a chave de administrador).
-4. Abra `js/config.js` **no seu PC**, cole os dois valores e publique no GitHub:
+4. Leve os dois valores para o **cofre** (`admin.html`) — veja a seção **3.2**.
+   A URL e a chave ficam **cifradas** dentro de `js/usuarios.js`, e só são abertas
+   depois que o operador faz login. Nada de chave em texto puro no GitHub.
 
-   ```js
-   var NUVEM_PADRAO = {
-     url: 'https://abcdefgh.supabase.co',
-     key: 'eyJhbGciOi...'
-   };
-   ```
-
-   Pronto: **todo celular que instalar o app já abre conectado**, ninguém digita nada.
+   Pronto: **todo celular que instalar o app já abre conectado**, ninguém digita nada
+   além do próprio login.
    - No primeiro aparelho, ele pergunta se quer **enviar o catálogo** para a nuvem. Aceite.
    - Nos demais, o estoque desce da nuvem automaticamente.
-   - Se preferir não publicar a chave, deixe `config.js` vazio e configure na mão em cada
-     celular: aba **Dados** → *Banco na nuvem* → cole os dois campos → **Conectar**.
+   - Se preferir não usar o cofre, deixe `js/usuarios.js` vazio: o app abre **sem login**
+     e a nuvem é configurada na mão em cada celular (aba **Dados** → *Banco na nuvem* →
+     cole os dois campos → **Conectar**).
    - O botão **Desconectar** deixa aquele aparelho só local, e ele *não* volta a se conectar
      sozinho; para religar, use **Conectar** naquele celular.
 
@@ -128,6 +127,54 @@ Como funciona:
 
 O histórico na nuvem é *append-only* (a política de segurança não permite apagar nem editar
 movimentação pelo celular) — some só pelo painel do Supabase.
+
+---
+
+## 3.2 Login dos operadores e cofre da chave (`admin.html`)
+
+O app pode exigir **login** e guardar a URL/chave do Supabase **criptografadas**.
+Tudo isso mora em um único arquivo gerado: `js/usuarios.js` (o *cofre*).
+
+Como o cofre funciona:
+
+- A URL e a chave são cifradas com **AES-GCM 256** por uma *chave-mestra* aleatória.
+- Para cada usuário, essa chave-mestra é embrulhada na **senha dele**, derivada com
+  **PBKDF2-SHA256, 310.000 rodadas**, com *salt* próprio.
+- **Nenhuma senha é guardada** — nem em texto, nem em hash reversível. Sem uma senha
+  válida, o arquivo publicado não serve para nada: não dá para ler a chave do Supabase.
+- Cada usuário tem a **sua** senha e todos abrem a mesma chave-mestra.
+
+### Criar o cofre (primeira vez)
+
+1. Abra **`admin.html`** no seu PC (basta dar duplo clique, ou usar o servidor local da
+   seção 8). **Não precisa de internet** e ele **nunca** deve ser aberto pelos operadores.
+2. Cole a **URL do projeto** e a **chave anon** do Supabase.
+3. Informe **seu login, seu nome e sua senha** (mínimo 6 caracteres) → **Criar cofre**.
+4. Em *Passo final*, clique **Baixar usuarios.js** e substitua o arquivo `js/usuarios.js`
+   do projeto. Publique no GitHub.
+5. Suba a `CACHE_VERSION` em `sw.js` (senão o celular continua com o cofre antigo em cache).
+
+### Adicionar, trocar senha ou remover operador
+
+1. Abra `admin.html`, cole a URL/chave outra vez **ou** carregue o cofre atual: o painel
+   pede o **seu login e senha** para destravar.
+2. Em *Usuários*: digite login + nome + senha → **Salvar usuário**.
+   - Se o login já existir, a senha é **substituída** (é assim que se reseta uma senha).
+   - **Remover** tira o acesso daquela pessoa.
+3. **Baixar usuarios.js** → substitua o arquivo → publique → suba a `CACHE_VERSION`.
+
+> Trocar a chave do Supabase depois? Use *Banco na nuvem* → **Atualizar dados da nuvem**
+> dentro do `admin.html`: o cofre é re-cifrado sem que ninguém precise trocar de senha.
+
+### No celular
+
+- Ao abrir o app aparece a tela de **Entrar** (login + senha).
+- **Manter conectado neste aparelho** deixa a sessão salva até alguém clicar em **Sair**
+  (aba *Dados*). Sem marcar, a sessão cai ao fechar o app.
+- O nome de quem está logado vai gravado em **toda movimentação** (coluna *usuário* do
+  histórico e da nuvem) — não é mais preciso "definir operador" na mão.
+- Senha esquecida? Não há recuperação (é esse o ponto): gere um cofre novo com uma
+  senha nova para aquele login, como descrito acima.
 
 ---
 
@@ -244,7 +291,9 @@ e acesse `http://localhost:8080` (localhost é tratado como seguro, a câmera fu
 ## 9. Manutenção
 
 - **Publicou mudanças e o celular não atualizou?** Suba a versão em `sw.js`
-  (`CACHE_VERSION = 'almox-pba-v1.0.1'`) e em `APP_VERSION` no `js/app.js`.
+  (`CACHE_VERSION = 'almox-pba-v1.5.0'`) e em `APP_VERSION` no `js/app.js`.
+- **Trocou o `js/usuarios.js` (cofre)?** Suba a `CACHE_VERSION` também — senão o celular
+  segue usando o cofre velho que está no cache.
 - **Trocar o ícone:** edite/rode `tools/gerar_icones.ps1`.
 - **Atualizar bibliotecas:** substitua os arquivos em `vendor/`
   (sql.js e html5-qrcode) e suba a `CACHE_VERSION`.

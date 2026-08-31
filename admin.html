@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cadastro de usuários — Almoxarifado PBA</title>
+<link rel="stylesheet" href="./css/styles.css">
+<style>
+  body { padding: 0 0 60px; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 16px 14px; }
+  .passo { color: var(--accent-2); font-size: 12.5px; text-transform: uppercase;
+           letter-spacing: .6px; font-weight: 700; margin-bottom: 6px; }
+  h1 { font-size: 21px; margin: 0 0 4px; }
+  .card { margin-bottom: 14px; }
+  .lista-user { display: flex; flex-direction: column; gap: 8px; }
+  .u { display: flex; align-items: center; gap: 10px; background: var(--card-2);
+       border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .u b { font-size: 14px; }
+  .u small { color: var(--muted); }
+  .u .grow { flex: 1; }
+  .x { background: transparent; border: 1px solid var(--danger); color: var(--danger);
+       border-radius: 8px; padding: 5px 10px; font-size: 12px; }
+  pre { background: #0b0f14; border: 1px solid var(--line); border-radius: 10px;
+        padding: 12px; overflow: auto; max-height: 190px; font-size: 11px;
+        color: var(--muted); white-space: pre-wrap; word-break: break-all; }
+  .oculto { display: none !important; }
+  .aviso { border-left: 3px solid var(--warn); padding-left: 10px; color: var(--muted);
+           font-size: 13px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header style="margin-bottom:16px">
+    <h1>Cadastro de usuários</h1>
+    <p class="muted small" style="margin:0">
+      Painel do administrador. Roda no seu PC, não precisa de internet e
+      <b>não</b> deve ser aberto pelos operadores.
+    </p>
+  </header>
+
+  <!-- ================= 1. DESTRANCAR / CRIAR ================= -->
+  <section id="secAbrir" class="card">
+    <div class="passo">Passo 1</div>
+    <h3 id="tituloAbrir">Destrancar o cofre</h3>
+    <p id="ajudaAbrir" class="muted small"></p>
+
+    <!-- criar do zero -->
+    <div id="boxCriar" class="oculto">
+      <label class="lbl" for="novoUrl">URL do projeto (Supabase)</label>
+      <input id="novoUrl" type="url" placeholder="https://abcdefgh.supabase.co" autocomplete="off">
+      <label class="lbl" for="novoKey">Chave anon / public</label>
+      <input id="novoKey" type="text" placeholder="eyJhbGciOi..." autocomplete="off">
+      <div class="row">
+        <div class="col">
+          <label class="lbl" for="admLogin">Seu login</label>
+          <input id="admLogin" type="text" placeholder="matheus" autocomplete="off">
+        </div>
+        <div class="col">
+          <label class="lbl" for="admNome">Seu nome</label>
+          <input id="admNome" type="text" placeholder="Matheus Movio" autocomplete="off">
+        </div>
+      </div>
+      <label class="lbl" for="admSenha">Sua senha (mínimo 6 caracteres)</label>
+      <input id="admSenha" type="password" autocomplete="new-password">
+      <button id="btnCriar" class="btn primary block" type="button">Criar cofre</button>
+    </div>
+
+    <!-- abrir existente -->
+    <div id="boxAbrir" class="oculto">
+      <div class="row">
+        <div class="col">
+          <label class="lbl" for="abrLogin">Login</label>
+          <input id="abrLogin" type="text" autocomplete="off">
+        </div>
+        <div class="col">
+          <label class="lbl" for="abrSenha">Senha</label>
+          <input id="abrSenha" type="password" autocomplete="current-password">
+        </div>
+      </div>
+      <button id="btnAbrir" class="btn primary block" type="button">Destrancar</button>
+    </div>
+  </section>
+
+  <!-- ================= 2. USUARIOS ================= -->
+  <section id="secUsuarios" class="card oculto">
+    <div class="passo">Passo 2</div>
+    <h3>Usuários</h3>
+    <div id="listaUsuarios" class="lista-user" style="margin-bottom:14px"></div>
+
+    <h3 style="font-size:15px">Adicionar / trocar senha</h3>
+    <p class="muted small">Se o login já existir, a senha dele é substituída.</p>
+    <div class="row">
+      <div class="col">
+        <label class="lbl" for="uLogin">Login</label>
+        <input id="uLogin" type="text" placeholder="joao" autocomplete="off">
+      </div>
+      <div class="col">
+        <label class="lbl" for="uNome">Nome (aparece no histórico)</label>
+        <input id="uNome" type="text" placeholder="João da Silva" autocomplete="off">
+      </div>
+    </div>
+    <label class="lbl" for="uSenha">Senha (mínimo 6 caracteres)</label>
+    <input id="uSenha" type="text" autocomplete="off">
+    <button id="btnAddUser" class="btn primary block" type="button">Salvar usuário</button>
+  </section>
+
+  <!-- ================= 3. NUVEM ================= -->
+  <section id="secNuvem" class="card oculto">
+    <div class="passo">Passo 3 (opcional)</div>
+    <h3>Banco na nuvem</h3>
+    <p class="muted small">Só mexa aqui se trocar de projeto no Supabase.</p>
+    <label class="lbl" for="cfgUrl">URL do projeto</label>
+    <input id="cfgUrl" type="url" autocomplete="off">
+    <label class="lbl" for="cfgKey">Chave anon / public</label>
+    <input id="cfgKey" type="text" autocomplete="off">
+    <button id="btnTrocarNuvem" class="btn ghost block" type="button">Atualizar dados da nuvem</button>
+  </section>
+
+  <!-- ================= 4. GERAR ================= -->
+  <section id="secGerar" class="card oculto">
+    <div class="passo">Passo final</div>
+    <h3>Gerar o arquivo</h3>
+    <p class="aviso">
+      Baixe o arquivo e coloque em <code>js/usuarios.js</code> (substituindo o antigo),
+      depois publique no GitHub. Enquanto você não fizer isso, nada mudou para os operadores.
+    </p>
+    <button id="btnBaixar" class="btn primary block" type="button">⭳ Baixar usuarios.js</button>
+    <button id="btnCopiar" class="btn ghost block" type="button">Copiar conteúdo</button>
+    <pre id="previa"></pre>
+  </section>
+
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="./js/usuarios.js"></script>
+<script src="./js/auth.js"></script>
+<script>
+(function () {
+'use strict';
+
+function $(id) { return document.getElementById(id); }
+var tmr = null;
+function toast(msg, kind) {
+  var t = $('toast');
+  t.className = 'toast show ' + (kind || '');
+  t.textContent = msg;
+  clearTimeout(tmr);
+  tmr = setTimeout(function () { t.className = 'toast'; }, 3000);
+}
+function mostrar(id, sim) { $(id).classList.toggle('oculto', !sim); }
+
+var cofre = null;         // objeto em edicao
+var mestraBytes = null;   // chave-mestra aberta (Uint8Array)
+var mestra = null;        // CryptoKey
+
+var existente = (typeof COFRE !== 'undefined' && COFRE && COFRE.usuarios && COFRE.usuarios.length);
+
+if (!window.crypto || !window.crypto.subtle) {
+  document.querySelector('.wrap').innerHTML =
+    '<div class="card"><h3>Navegador sem suporte</h3><p class="muted">' +
+    'Abra esta página por <b>http://localhost</b> ou <b>https://</b> ' +
+    '(a criptografia do navegador não funciona em arquivo solto <code>file://</code>).</p></div>';
+  return;
+}
+
+if (existente) {
+  $('tituloAbrir').textContent = 'Destrancar o cofre';
+  $('ajudaAbrir').textContent = 'Entre com um usuário já cadastrado para poder incluir outros.';
+  mostrar('boxAbrir', true);
+} else {
+  $('tituloAbrir').textContent = 'Criar o cofre (primeira vez)';
+  $('ajudaAbrir').textContent = 'Ainda não há usuários. Informe os dados do Supabase e crie o primeiro acesso.';
+  mostrar('boxCriar', true);
+}
+
+function abriuCofre() {
+  mostrar('secAbrir', false);
+  mostrar('secUsuarios', true);
+  mostrar('secNuvem', true);
+  mostrar('secGerar', true);
+  pintarUsuarios();
+  gerar();
+}
+
+function pintarUsuarios() {
+  var box = $('listaUsuarios');
+  if (!cofre.usuarios.length) {
+    box.innerHTML = '<div class="vazio">Nenhum usuário.</div>';
+    return;
+  }
+  box.innerHTML = cofre.usuarios.map(function (u) {
+    return '<div class="u"><div class="grow"><b>' + u.login + '</b><br>' +
+           '<small>' + (u.nome || '') + '</small></div>' +
+           '<button class="x" data-rm="' + u.login + '" type="button">Remover</button></div>';
+  }).join('');
+  Array.prototype.forEach.call(box.querySelectorAll('[data-rm]'), function (b) {
+    b.addEventListener('click', function () {
+      if (cofre.usuarios.length <= 1) { toast('Precisa sobrar pelo menos um usuário.', 'err'); return; }
+      if (!confirm('Remover ' + b.dataset.rm + '? Ele perde o acesso no próximo update do app.')) return;
+      Auth.admin.removerUsuario(cofre, b.dataset.rm);
+      pintarUsuarios(); gerar();
+    });
+  });
+}
+
+/* ---------- criar ---------- */
+$('btnCriar').addEventListener('click', function () {
+  var url = $('novoUrl').value.trim().replace(/\/+$/, '');
+  var key = $('novoKey').value.trim();
+  var lg = $('admLogin').value.trim();
+  var nm = $('admNome').value.trim() || lg;
+  var sn = $('admSenha').value;
+
+  if (!/^https?:\/\/.+/.test(url)) { toast('URL inválida (precisa começar com https://).', 'err'); return; }
+  if (key.length < 20) { toast('Chave anon parece curta demais.', 'err'); return; }
+  if (!lg) { toast('Informe o login.', 'err'); return; }
+  if (sn.length < 6) { toast('Senha muito curta (mínimo 6).', 'err'); return; }
+
+  this.disabled = true; this.textContent = 'Criando...';
+  var btn = this;
+  Auth.admin.criar(url, key)
+    .then(function (r) {
+      cofre = r.cofre; mestra = r.mestra; mestraBytes = r.mestraBytes;
+      return Auth.admin.addUsuario(cofre, mestraBytes, { login: lg, nome: nm, senha: sn });
+    })
+    .then(function () {
+      $('cfgUrl').value = url; $('cfgKey').value = key;
+      toast('Cofre criado.', 'ok');
+      abriuCofre();
+    })
+    .catch(function (e) { toast('Erro: ' + e.message, 'err'); })
+    .then(function () { btn.disabled = false; btn.textContent = 'Criar cofre'; });
+});
+
+/* ---------- abrir ---------- */
+$('btnAbrir').addEventListener('click', function () {
+  var btn = this;
+  btn.disabled = true; btn.textContent = 'Destrancando...';
+  cofre = JSON.parse(JSON.stringify(COFRE));
+  Auth.admin.abrir(cofre, $('abrLogin').value, $('abrSenha').value)
+    .then(function (r) {
+      mestra = r.mestra; mestraBytes = r.mestraBytes;
+      /* mostra a config atual em claro para conferencia */
+      return crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: Uint8Array.from(atob(cofre.cfg.iv), function (c) { return c.charCodeAt(0); }) },
+        mestra,
+        Uint8Array.from(atob(cofre.cfg.ct), function (c) { return c.charCodeAt(0); })
+      );
+    })
+    .then(function (buf) {
+      var c = JSON.parse(new TextDecoder().decode(buf));
+      $('cfgUrl').value = c.url; $('cfgKey').value = c.key;
+      toast('Cofre aberto.', 'ok');
+      abriuCofre();
+    })
+    .catch(function (e) { toast(e.message, 'err'); })
+    .then(function () { btn.disabled = false; btn.textContent = 'Destrancar'; });
+});
+
+/* ---------- adicionar usuario ---------- */
+$('btnAddUser').addEventListener('click', function () {
+  var lg = $('uLogin').value.trim();
+  var nm = $('uNome').value.trim() || lg;
+  var sn = $('uSenha').value;
+  if (!lg) { toast('Informe o login.', 'err'); return; }
+  if (sn.length < 6) { toast('Senha muito curta (mínimo 6).', 'err'); return; }
+
+  var btn = this;
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  Auth.admin.addUsuario(cofre, mestraBytes, { login: lg, nome: nm, senha: sn })
+    .then(function () {
+      $('uLogin').value = ''; $('uNome').value = ''; $('uSenha').value = '';
+      pintarUsuarios(); gerar();
+      toast('Usuário salvo: ' + lg, 'ok');
+    })
+    .catch(function (e) { toast('Erro: ' + e.message, 'err'); })
+    .then(function () { btn.disabled = false; btn.textContent = 'Salvar usuário'; });
+});
+
+/* ---------- trocar nuvem ---------- */
+$('btnTrocarNuvem').addEventListener('click', function () {
+  var url = $('cfgUrl').value.trim().replace(/\/+$/, '');
+  var key = $('cfgKey').value.trim();
+  if (!/^https?:\/\/.+/.test(url) || key.length < 20) { toast('URL ou chave inválida.', 'err'); return; }
+  Auth.admin.trocarNuvem(cofre, mestra, url, key).then(function () {
+    gerar(); toast('Dados da nuvem atualizados.', 'ok');
+  });
+});
+
+/* ---------- gerar arquivo ---------- */
+var conteudo = '';
+function gerar() {
+  conteudo = Auth.admin.serializar(cofre);
+  $('previa').textContent = conteudo.slice(0, 1200) + (conteudo.length > 1200 ? '\n...' : '');
+}
+
+$('btnBaixar').addEventListener('click', function () {
+  var blob = new Blob([conteudo], { type: 'text/javascript' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'usuarios.js';
+  document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  toast('Baixado. Coloque em js/usuarios.js e publique.', 'ok');
+});
+
+$('btnCopiar').addEventListener('click', function () {
+  navigator.clipboard.writeText(conteudo)
+    .then(function () { toast('Copiado.', 'ok'); })
+    .catch(function () { toast('Não consegui copiar - use o botão Baixar.', 'err'); });
+});
+
+})();
+</script>
+</body>
+</html>

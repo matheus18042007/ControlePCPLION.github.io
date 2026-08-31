@@ -11,9 +11,13 @@ var Nuvem = (function () {
   var CHAVE_CFG = 'nuvem_cfg';
   var CHAVE_OFF = 'nuvem_desligada';   // aparelho que escolheu ficar so local
 
-  /* config publicada junto com o app (js/config.js) */
+  /* Config publicada junto com o app.
+     1o) cofre criptografado (js/usuarios.js), aberto no login;
+     2o) js/config.js em texto puro, se ainda existir (legado). */
   function padrao() {
-    var p = (typeof NUVEM_PADRAO !== 'undefined') ? NUVEM_PADRAO : null;
+    var p = null;
+    if (typeof Auth !== 'undefined' && Auth.configNuvem) p = Auth.configNuvem();
+    if (!p && typeof NUVEM_PADRAO !== 'undefined') p = NUVEM_PADRAO;
     if (!p) return null;
     var u = (p.url || '').trim().replace(/\/+$/, '');
     var k = (p.key || '').trim();

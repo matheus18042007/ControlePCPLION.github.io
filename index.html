@@ -240,9 +240,33 @@
 <div id="toast" class="toast"></div>
 <div id="splash" class="splash"><div class="spinner"></div><span>Preparando banco de dados...</span></div>
 
+<!-- ================= LOGIN ================= -->
+<div id="login" class="login hidden">
+  <form id="loginForm" class="login-box" autocomplete="on">
+    <span class="logo lg">PBA</span>
+    <h2>Almoxarifado</h2>
+    <p class="muted small" style="margin:0 0 14px">Entre para acessar o estoque</p>
+
+    <label class="lbl" for="loginUser">Usuário</label>
+    <input id="loginUser" type="text" autocomplete="username"
+           autocapitalize="none" autocorrect="off" spellcheck="false">
+
+    <label class="lbl" for="loginSenha">Senha</label>
+    <input id="loginSenha" type="password" autocomplete="current-password">
+
+    <label class="check" style="margin:12px 0 4px">
+      <input id="loginLembrar" type="checkbox" checked> Manter conectado neste aparelho
+    </label>
+
+    <div id="loginErro" class="login-erro hidden"></div>
+    <button id="btnEntrar" class="btn primary big block" type="submit">Entrar</button>
+  </form>
+</div>
+
 <script src="./vendor/sql-wasm.js"></script>
 <script src="./vendor/html5-qrcode.min.js"></script>
-<script src="./js/config.js"></script>
+<script src="./js/usuarios.js"></script>
+<script src="./js/auth.js"></script>
 <script src="./js/nuvem.js"></script>
 <script src="./js/app.js"></script>
 </body>

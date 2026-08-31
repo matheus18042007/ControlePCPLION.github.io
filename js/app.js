@@ -5,7 +5,7 @@
 (function () {
 'use strict';
 
-var APP_VERSION = '1.4.0';
+var APP_VERSION = '1.5.0';
 
 /* ---------------------------------------------------------
    Atalhos DOM
@@ -304,7 +304,11 @@ var estado = {
   scanAtivo: false
 };
 
-function operador() { return localStorage.getItem('operador') || ''; }
+/* Com login ativo o operador é o usuário da sessão (não dá para
+   digitar outro nome no histórico). Sem cofre, cai no nome manual. */
+function operador() {
+  return Auth.usuario() || localStorage.getItem('operador') || '';
+}
 
 function mostrarView(nome) {
   estado.view = nome;
@@ -934,7 +938,9 @@ function atualizarStats() {
   $('appVersao').textContent = APP_VERSION;
   $('statSalvo').textContent = fmtDataHora(localStorage.getItem('ultimo_salvamento')) || '-';
   $('topSub').textContent = ni + ' itens • ' + nm + ' movimentações';
-  $('operadorLabel').textContent = operador() || 'definir operador';
+  $('operadorLabel').textContent = Auth.atual()
+    ? ('👤 ' + Auth.usuario())
+    : (operador() || 'definir operador');
 }
 
 /* ---------------------------------------------------------
@@ -946,6 +952,14 @@ function ligarEventos() {
   });
 
   $('btnOperador').addEventListener('click', function () {
+    if (Auth.atual()) {
+      if (!confirm('Sair da conta de ' + Auth.usuario() + '?\n\n' +
+                   'O estoque continua salvo neste aparelho, mas será preciso ' +
+                   'entrar de novo para usar o app.')) return;
+      Auth.sair();
+      location.reload();
+      return;
+    }
     var n = prompt('Nome do operador (aparece no histórico):', operador());
     if (n !== null) { localStorage.setItem('operador', n.trim()); atualizarStats(); }
   });
@@ -1185,21 +1199,80 @@ function registrarSW() {
 }
 
 /* ---------------------------------------------------------
-   BOOT
+   LOGIN
 --------------------------------------------------------- */
-iniciarSQL().then(function () {
+function abrirLogin() {
+  $('login').classList.remove('hidden');
+  $('loginUser').focus();
+}
+
+function erroLogin(msg) {
+  var e = $('loginErro');
+  e.textContent = msg || '';
+  e.classList.toggle('hidden', !msg);
+}
+
+/* depois do login (ou quando não há cofre) o app sobe de verdade */
+function entrarNoApp() {
+  $('login').classList.add('hidden');
   Nuvem.carregar();
-  ligarEventos();
   pintarConfigNuvem();
   atualizarStats();
   renderEstoque();
-  $('splash').classList.add('hide');
-  registrarSW();
   sincronizar(true);
   // atalho do ícone do app: abrir direto no scanner
   try {
     if (new URLSearchParams(location.search).get('acao') === 'scan') mostrarView('scan');
   } catch (e) {}
+}
+
+function ligarLogin() {
+  $('loginForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var btn = $('btnEntrar');
+    var u = $('loginUser').value.trim();
+    var s = $('loginSenha').value;
+    if (!u || !s) { erroLogin('Informe usuário e senha.'); return; }
+
+    erroLogin('');
+    btn.disabled = true;
+    btn.textContent = 'Entrando...';
+
+    /* PBKDF2 trava a tela por um instante; deixa o navegador pintar antes */
+    setTimeout(function () {
+      Auth.entrar(u, s, $('loginLembrar').checked)
+        .then(function () {
+          $('loginSenha').value = '';
+          atualizarStats();
+          entrarNoApp();
+        })
+        .catch(function (e) {
+          erroLogin(e.message);
+          vibrar([60, 50, 60]);
+          $('loginSenha').value = '';
+          $('loginSenha').focus();
+        })
+        .then(function () {
+          btn.disabled = false;
+          btn.textContent = 'Entrar';
+        });
+    }, 30);
+  });
+}
+
+/* ---------------------------------------------------------
+   BOOT
+--------------------------------------------------------- */
+iniciarSQL().then(function () {
+  ligarEventos();
+  ligarLogin();
+  $('splash').classList.add('hide');
+  registrarSW();
+
+  /* Sem cofre publicado (js/usuarios.js vazio) o app segue como antes:
+     sem login, com a nuvem configurada na mão em cada aparelho. */
+  if (Auth.temCofre() && !Auth.restaurar()) { abrirLogin(); return; }
+  entrarNoApp();
 }).catch(function (e) {
   $('splash').innerHTML = '<div style="padding:24px;text-align:center;color:#ff6b6b">' +
     'Falha ao iniciar o banco de dados.<br><small>' + esc(e && e.message) + '</small></div>';

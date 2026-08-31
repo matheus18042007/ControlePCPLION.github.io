@@ -8,14 +8,16 @@
    Para publicar uma atualização: mudar CACHE_VERSION abaixo.
    ============================================================ */
 
-var CACHE_VERSION = 'almox-pba-v1.4.0';
+var CACHE_VERSION = 'almox-pba-v1.5.0';
 
 var ARQUIVOS = [
   './',
   './index.html',
   './manifest.json',
   './css/styles.css',
-  './js/config.js',
+  './admin.html',
+  './js/usuarios.js',
+  './js/auth.js',
   './js/nuvem.js',
   './js/app.js',
   './vendor/sql-wasm.js',
@@ -57,15 +59,24 @@ self.addEventListener('fetch', function (e) {
   var url = new URL(req.url);
   if (url.origin !== location.origin) return;
 
-  // HTML / navegação -> network-first
-  if (req.mode === 'navigate' || (req.headers.get('accept') || '').indexOf('text/html') > -1) {
+  // HTML / navegação e o cofre de usuários -> network-first
+  // (o cofre muda toda vez que um usuário é cadastrado; não pode
+  //  ficar preso no cache até a próxima versão do app)
+  var ehCofre = url.pathname.indexOf('/js/usuarios.js') > -1;
+  var ehHtml = req.mode === 'navigate' ||
+               (req.headers.get('accept') || '').indexOf('text/html') > -1;
+
+  if (ehHtml || ehCofre) {
     e.respondWith(
       fetch(req).then(function (resp) {
         var copia = resp.clone();
         caches.open(CACHE_VERSION).then(function (c) { c.put(req, copia); });
         return resp;
       }).catch(function () {
-        return caches.match(req).then(function (r) { return r || caches.match('./index.html'); });
+        return caches.match(req).then(function (r) {
+          if (r) return r;
+          return ehHtml ? caches.match('./index.html') : Response.error();
+        });
       })
     );
     return;
