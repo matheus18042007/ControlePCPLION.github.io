@@ -8,7 +8,7 @@
    Para publicar uma atualização: mudar CACHE_VERSION abaixo.
    ============================================================ */
 
-var CACHE_VERSION = 'almox-pba-v1.7.0';
+var CACHE_VERSION = 'almox-pba-v1.8.0';
 
 var ARQUIVOS = [
   './',
@@ -67,8 +67,11 @@ self.addEventListener('fetch', function (e) {
                (req.headers.get('accept') || '').indexOf('text/html') > -1;
 
   if (ehHtml || ehCofre) {
+    /* 'no-store' fura o cache HTTP do navegador/CDN (o GitHub Pages
+       serve com max-age, entao 'network-first' sozinho ainda entregava
+       o cofre antigo por varios minutos depois de publicar). */
     e.respondWith(
-      fetch(req).then(function (resp) {
+      fetch(req.url, { cache: 'no-store', credentials: 'same-origin' }).then(function (resp) {
         var copia = resp.clone();
         caches.open(CACHE_VERSION).then(function (c) { c.put(req, copia); });
         return resp;
