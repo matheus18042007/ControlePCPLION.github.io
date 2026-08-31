@@ -188,6 +188,19 @@ var Nuvem = (function () {
     });
   }
 
+  /* apaga o item e todo o historico dele na nuvem (nao tem volta) */
+  function excluirItem(codigo, usuario) {
+    return req('/rpc/excluir_item', {
+      method: 'POST',
+      body: {
+        p_codigo: codigo,
+        p_usuario: usuario || null,
+        p_aparelho: aparelho()
+      },
+      timeout: 30000
+    }).then(function (r) { return (r && r.codigo) ? r : { codigo: codigo, movimentacoes: 0 }; });
+  }
+
   function editarItem(codigo, campos) {
     campos.atualizado_em = new Date().toISOString();
     return req('/itens?codigo=eq.' + encodeURIComponent(codigo), {
@@ -232,6 +245,7 @@ var Nuvem = (function () {
     puxarItem: puxarItem,
     registrarMov: registrarMov,
     cadastrarItem: cadastrarItem,
+    excluirItem: excluirItem,
     editarItem: editarItem,
     enviarItens: enviarItens
   };

@@ -6,24 +6,24 @@
    (PBKDF2-SHA256, 310000 rodadas). Sem senha valida,
    este arquivo nao serve para nada.
 
-   Usuarios: matheus movio
-   Gerado em: 31/08/2026, 14:57:38
+   Usuarios: Matheus movio
+   Gerado em: 31/08/2026, 16:21:06
    ========================================================= */
 var COFRE = {
   "v": 1,
   "iter": 310000,
   "cfg": {
-    "iv": "q0MeqSzgLzeCkFr7",
-    "ct": "CErZUKo2pM6ZHjMpOIbWnkSmwKuCpIcH3gEEtyKdDPAizCrfi8dedJ4nCI9QUQ59EsqcjFOo56pGrukTlmXt8V521E/WqFNYTbvqsz6tegIy7r5UAcfOpbPvnmaepFHWJaobqn7RXB1VWRGklsUHLj3tNMSVYD7b6ioWTiv8noz8OUpMsT0YhZxl/4pxZGxshW3BCQUMtgxh4baUvoPw5HInaORBzHimw5h86U1ZHOr1R6ozXNDbFTEmMAysJS4yUXfBLtsblLac7qpjbA7q+UBOCUCb8z3tEnKog2NwvLD/KmcEmSCu0D3aJE5BMp+W0meOzILvZg8Twgnq31eChuZUoGtqqXsZl0zazVWfFV/d2Pmbd936wGD22A=="
+    "iv": "Ya/c6/oo25LpqrjJ",
+    "ct": "b/M+4x0oC0oDQgAeMNAuSRRMbSMYtxW/VsV5xrxwIWwm033KTp0l/LByQwxlIxKLHam6qqEgabQm8iUrG0Gk9ROAKwszHhhuxjAWKBnNlbiaSaU2zap0oT+JUqzgyX/P5y4wrel9n9kwtyJLBzBfId5MiYNyjCRE5Wc8EAVJmMULoIKbxDG965iZ1x3k90C1+LG8j658lRJBoT3l3+lifj0OCLU2irwOh+6P6q/mFUIG4TdrYcKmz54XMjPtbXiuqHktNJeaA2d+IuhA2ENvn4HB2hKsR+13xSNM/zdKT9vSpjo0kg2xSG4qS9nsmSj4tO8ccc3RIN5HWJfg1ge1+BxRqYCpSt3VGFbXYd6YGoztvX8pA4YaIZ2D+A=="
   },
   "usuarios": [
     {
-      "login": "matheus movio",
-      "nome": "Matheus movio",
-      "salt": "8GiGoFLHco4Q9RkEFiTCOw==",
+      "login": "Matheus movio",
+      "nome": "matheus movio",
+      "salt": "+mHJG7+MkzdtPAKs1uqlnA==",
       "env": {
-        "iv": "BuubweQ2/zU7fOwo",
-        "ct": "CYXM8hKGigb2BLQshX8Rjex4Lbqe+QXxa012lKLoV8wi6m0In0mDtESEuGGobv0y"
+        "iv": "ey9JnPS9VvdhtAUQ",
+        "ct": "Nl2GlZFqQIu2FGKxYqiVKBBnl0yzJWuNfsSoZ3BFF+8h+wdjGuvSZ+1QRxuKHTtY"
       }
     }
   ]

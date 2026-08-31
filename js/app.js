@@ -5,7 +5,7 @@
 (function () {
 'use strict';
 
-var APP_VERSION = '1.6.0';
+var APP_VERSION = '1.7.0';
 
 /* ---------------------------------------------------------
    Atalhos DOM
@@ -1086,6 +1086,51 @@ function ligarEventos() {
   $('btnExportDb').addEventListener('click', exportarDB);
   $('btnExportCsvItens').addEventListener('click', exportarItensCSV);
   $('btnExportCsvMov').addEventListener('click', exportarMovCSV);
+  $('btnExcluirItem').addEventListener('click', function () {
+    var btn = $('btnExcluirItem');
+    var codigo = normalizarCodigo($('excluirCodigo').value || '');
+    if (!codigo) { toast('Informe o código do item', 'err'); return; }
+
+    var it = buscarItem(codigo);
+    var nome = it ? it.nome : '(não existe neste aparelho)';
+    if (it) codigo = it.codigo;
+
+    var mov = um('SELECT COUNT(*) c FROM movimentacoes WHERE codigo_item=$c', { $c: codigo });
+    var qtd = mov ? Number(mov.c) || 0 : 0;
+
+    if (!confirm('Excluir ' + codigo + ' — ' + nome + '?\n\n'
+      + 'Apaga o item e ' + qtd + ' movimentaç' + (qtd === 1 ? 'ão' : 'ões')
+      + (Nuvem.ativa() ? ' deste aparelho E DA NUVEM (todos os celulares).' : ' deste aparelho.'))) return;
+    if (!confirm('Tem certeza? Esta ação não pode ser desfeita.')) return;
+
+    function apagarLocal() {
+      db.run('DELETE FROM movimentacoes WHERE codigo_item=$c', { $c: codigo });
+      db.run('DELETE FROM itens WHERE codigo=$c', { $c: codigo });
+      salvar(true);
+      renderEstoque(); atualizarStats();
+      if (estado.itemAtual && estado.itemAtual.codigo === codigo) { estado.itemAtual = null; fecharSheets(); }
+      $('excluirCodigo').value = '';
+    }
+
+    if (!Nuvem.ativa()) { apagarLocal(); toast('Item ' + codigo + ' excluído', 'ok'); return; }
+
+    btn.disabled = true;
+    nuvemStatus('Excluindo na nuvem...', 'sync');
+    Nuvem.excluirItem(codigo, operador()).then(function (r) {
+      apagarLocal();
+      toast('Item ' + codigo + ' excluído da nuvem (' + (Number(r.movimentacoes) || 0) + ' mov.)', 'ok');
+      atualizarStatusNuvem();
+    }).catch(function (e) {
+      atualizarStatusNuvem();
+      if (/nao existe/i.test(e.message)) {
+        apagarLocal();
+        toast('Item não estava na nuvem; apagado deste aparelho', 'ok');
+        return;
+      }
+      toast('Não excluiu: ' + e.message, 'err');
+    }).then(function () { btn.disabled = false; });
+  });
+
   $('btnZerar').addEventListener('click', function () {
     var aviso = Nuvem.ativa()
       ? 'Apagar os dados DESTE APARELHO?\n\nA nuvem NÃO é apagada — na próxima sincronização tudo volta.'

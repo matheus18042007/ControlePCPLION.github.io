@@ -185,7 +185,7 @@ Como o cofre funciona:
 | **📦 Estoque** | Lista pesquisável por código/nome, filtros *Estoque baixo* e *Zerados*. Toque no item para abrir. |
 | **⛶ Escanear** | Liga a câmera e lê o QR Code. Também aceita digitar o código manualmente. |
 | **🕘 Histórico** | Todas as movimentações, com filtro por tipo (entrada/saída), período e texto. |
-| **⚙ Dados** | Importar CSV, cadastro manual, exportar `.db`/`.csv`, importar `.db`, apagar dados. |
+| **⚙ Dados** | Importar CSV, cadastro manual, **excluir item**, exportar `.db`/`.csv`, importar `.db`, apagar dados. |
 
 **Fluxo operacional:**
 
@@ -199,6 +199,20 @@ Escanear QR  →  Tela do item (nome + saldo)  →  [➕ Entrada] ou [➖ Saída
 - Toque no botão do topo direito para definir o **nome do operador** — ele é gravado
   em cada movimentação.
 - Cada confirmação grava no banco e persiste imediatamente no aparelho.
+
+### Excluir um item por completo (aba *Dados*)
+
+O card **Excluir item** apaga o código **do banco na nuvem**: some o item e todo o
+histórico dele, numa única transação (função `excluir_item`). Não tem como desfazer —
+exporte o backup antes.
+
+- Digite o código e confirme duas vezes (a segunda mostra quantas movimentações vão embora).
+- **Com nuvem ligada:** só apaga aqui depois que o servidor confirmar. Se a nuvem não
+  responder, **nada é apagado** — nem no celular. Assim dois aparelhos não ficam divergentes.
+- **Sem nuvem** (app local): apaga só neste aparelho.
+- Fica um rastro na tabela `exclusoes` do Supabase (código, nome, saldo final, quantas
+  movimentações, quem excluiu e de qual aparelho) — as políticas de RLS continuam sem
+  permitir `DELETE` solto pelo app.
 
 ### QR Codes aceitos
 

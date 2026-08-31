@@ -130,15 +130,78 @@ end;
 $$;
 
 -- ---------------------------------------------------------
+-- 3.1 Excluir um item POR COMPLETO
+--     Apaga o item e todo o historico dele, numa transacao so'.
+--     E' a UNICA porta de exclusao: a chave "anon" nao tem
+--     permissao de DELETE nas tabelas (ver secao 4), entao
+--     ninguem apaga linha solta por fora desta funcao.
+--     O que foi apagado fica registrado em public.exclusoes.
+-- ---------------------------------------------------------
+create table if not exists public.exclusoes (
+  id            bigint generated always as identity primary key,
+  codigo_item   text not null,
+  nome          text,
+  saldo_final   numeric,
+  movimentacoes integer not null default 0,
+  usuario       text,
+  aparelho      text,
+  data_hora     timestamptz not null default now()
+);
+
+create index if not exists ix_exc_data on public.exclusoes (data_hora desc);
+
+create or replace function public.excluir_item(
+  p_codigo    text,
+  p_usuario   text default null,
+  p_aparelho  text default null
+) returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_item  public.itens%rowtype;
+  v_movs  integer := 0;
+begin
+  if p_codigo is null or btrim(p_codigo) = '' then
+    raise exception 'Informe o codigo do item';
+  end if;
+
+  /* trava a linha para ninguem movimentar durante a exclusao */
+  select * into v_item from public.itens where codigo = p_codigo for update;
+  if not found then
+    raise exception 'Item % nao existe na nuvem', p_codigo;
+  end if;
+
+  delete from public.movimentacoes where codigo_item = p_codigo;
+  get diagnostics v_movs = row_count;
+
+  delete from public.itens where codigo = p_codigo;
+
+  insert into public.exclusoes (codigo_item, nome, saldo_final, movimentacoes, usuario, aparelho)
+  values (v_item.codigo, v_item.nome, v_item.estoque_atual, v_movs, p_usuario, p_aparelho);
+
+  return json_build_object(
+    'codigo',        v_item.codigo,
+    'nome',          v_item.nome,
+    'saldo',         v_item.estoque_atual,
+    'movimentacoes', v_movs
+  );
+end;
+$$;
+
+-- ---------------------------------------------------------
 -- 4. Seguranca (RLS)
 --    O app usa a chave "anon", que fica no celular. Liberamos
---    ler / inserir / atualizar, mas NAO apagar: o historico de
---    movimentacoes e' append-only e nao pode ser adulterado
---    pelo aparelho. Exclusoes so' pelo painel do Supabase.
+--    ler / inserir / atualizar, mas NAO apagar direto: o
+--    historico e' append-only e so' some junto com o item,
+--    pela funcao excluir_item (que deixa rastro em exclusoes).
 -- ---------------------------------------------------------
 alter table public.itens         enable row level security;
 alter table public.movimentacoes enable row level security;
+alter table public.exclusoes     enable row level security;
 
+drop policy if exists exc_ler       on public.exclusoes;
 drop policy if exists itens_ler      on public.itens;
 drop policy if exists itens_inserir  on public.itens;
 drop policy if exists itens_editar   on public.itens;
@@ -150,9 +213,11 @@ create policy itens_inserir on public.itens         for insert to anon, authenti
 create policy itens_editar  on public.itens         for update to anon, authenticated using (true) with check (true);
 create policy mov_ler       on public.movimentacoes for select to anon, authenticated using (true);
 create policy mov_inserir   on public.movimentacoes for insert to anon, authenticated with check (true);
+create policy exc_ler       on public.exclusoes     for select to anon, authenticated using (true);
 
 grant execute on function public.registrar_movimentacao(text, text, numeric, text, text, boolean, text) to anon, authenticated;
 grant execute on function public.cadastrar_item(text, text, text, text, numeric, numeric, text) to anon, authenticated;
+grant execute on function public.excluir_item(text, text, text) to anon, authenticated;
 
 -- ---------------------------------------------------------
 -- 5. Relatorio pronto (opcional) - itens abaixo do minimo
