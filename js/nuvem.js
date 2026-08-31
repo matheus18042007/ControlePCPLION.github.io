@@ -1,19 +1,18 @@
 /* =========================================================
    Nuvem - Supabase (PostgREST via fetch, sem SDK)
-   A URL e a chave anon ficam no localStorage de cada aparelho,
-   NAO no codigo publicado no GitHub.
+   A URL e a chave anon vem SOMENTE do cofre cifrado
+   (js/usuarios.js), aberto no login. Nada e guardado no
+   aparelho e o operador nao configura nem desliga nada:
+   todo mundo que entra usa o mesmo banco oficial.
    ========================================================= */
 var Nuvem = (function () {
   'use strict';
 
   var cfg = { url: '', key: '' };
   var online = false;          // ultima chamada deu certo?
-  var CHAVE_CFG = 'nuvem_cfg';
-  var CHAVE_OFF = 'nuvem_desligada';   // aparelho que escolheu ficar so local
 
-  /* Config publicada junto com o app.
-     1o) cofre criptografado (js/usuarios.js), aberto no login;
-     2o) js/config.js em texto puro, se ainda existir (legado). */
+  /* Fonte unica: o cofre. (NUVEM_PADRAO em texto puro so
+     sobrevive como legado, para instalacoes antigas.) */
   function padrao() {
     var p = null;
     if (typeof Auth !== 'undefined' && Auth.configNuvem) p = Auth.configNuvem();
@@ -24,42 +23,28 @@ var Nuvem = (function () {
     return (u && k) ? { url: u, key: k } : null;
   }
 
+  /* chamada a cada login/logout: a config vive so na memoria */
   function carregar() {
+    var p = padrao();
+    cfg = p ? { url: p.url, key: p.key } : { url: '', key: '' };
+    if (!p) online = false;
+    /* limpeza de versoes antigas, que copiavam a chave no aparelho */
     try {
-      var c = JSON.parse(localStorage.getItem(CHAVE_CFG) || '{}');
-      cfg.url = (c.url || '').replace(/\/+$/, '');
-      cfg.key = c.key || '';
-    } catch (e) { cfg = { url: '', key: '' }; }
-
-    /* nada salvo neste aparelho -> adota a config publicada,
-       a menos que o usuario tenha desconectado de proposito */
-    if (!cfg.url || !cfg.key) {
-      var p = padrao();
-      if (p && localStorage.getItem(CHAVE_OFF) !== '1') {
-        cfg.url = p.url; cfg.key = p.key;
-      }
-    }
+      localStorage.removeItem('nuvem_cfg');
+      localStorage.removeItem('nuvem_desligada');
+    } catch (e) {}
     return cfg;
-  }
-
-  function salvarCfg(url, key) {
-    cfg.url = (url || '').trim().replace(/\/+$/, '');
-    cfg.key = (key || '').trim();
-    localStorage.setItem(CHAVE_CFG, JSON.stringify(cfg));
-    localStorage.removeItem(CHAVE_OFF);
-  }
-
-  function limpar() {
-    cfg = { url: '', key: '' };
-    online = false;
-    localStorage.removeItem(CHAVE_CFG);
-    /* marca para nao voltar sozinho na config publicada */
-    localStorage.setItem(CHAVE_OFF, '1');
   }
 
   function ativa() { return !!(cfg.url && cfg.key); }
   function conectado() { return online; }
   function config() { return { url: cfg.url, key: cfg.key }; }
+
+  /* so o host, para mostrar na tela sem expor a chave */
+  function servidor() {
+    if (!cfg.url) return '';
+    try { return new URL(cfg.url).host; } catch (e) { return cfg.url; }
+  }
 
   /* identifica o aparelho no historico */
   function aparelho() {
@@ -236,11 +221,10 @@ var Nuvem = (function () {
 
   return {
     carregar: carregar,
-    salvarCfg: salvarCfg,
-    limpar: limpar,
     ativa: ativa,
     conectado: conectado,
     config: config,
+    servidor: servidor,
     aparelho: aparelho,
     testar: testar,
     puxarTudo: puxarTudo,

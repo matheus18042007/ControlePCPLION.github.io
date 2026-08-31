@@ -120,17 +120,12 @@
 
     <div class="card">
       <h3>Banco na nuvem (Supabase)</h3>
-      <p class="muted small">Liga este aparelho ao estoque compartilhado. Cole os dados do painel do Supabase em <em>Settings &rarr; API</em>.</p>
+      <p class="muted small" id="nuvemAviso">Este aparelho usa o banco oficial do almoxarifado, definido no cofre do app. Não há nada para configurar aqui.</p>
       <div class="kv"><span>Situação</span><b id="nuvemEstado">Não configurado</b></div>
+      <div class="kv"><span>Servidor</span><b id="nuvemServidor">-</b></div>
       <div class="kv"><span>Aparelho</span><b id="nuvemAparelho">-</b></div>
-      <label class="lbl" for="nuvemUrl">Project URL</label>
-      <input id="nuvemUrl" type="url" inputmode="url" placeholder="https://xxxxx.supabase.co" autocomplete="off" autocapitalize="off" spellcheck="false">
-      <label class="lbl" for="nuvemKey">Chave anon (public)</label>
-      <input id="nuvemKey" type="text" placeholder="eyJhbGciOi..." autocomplete="off" autocapitalize="off" spellcheck="false">
-      <button id="btnNuvemSalvar" class="btn primary block" type="button">Conectar</button>
-      <button id="btnNuvemSync" class="btn ghost block" type="button">🔄 Sincronizar agora</button>
+      <button id="btnNuvemSync" class="btn primary block" type="button">🔄 Sincronizar agora</button>
       <button id="btnNuvemEnviar" class="btn ghost block" type="button">⬆ Enviar itens deste aparelho para a nuvem</button>
-      <button id="btnNuvemSair" class="btn ghost block" type="button">Desconectar</button>
     </div>
 
     <div class="card">

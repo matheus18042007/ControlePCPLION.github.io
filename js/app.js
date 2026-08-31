@@ -5,7 +5,7 @@
 (function () {
 'use strict';
 
-var APP_VERSION = '1.5.0';
+var APP_VERSION = '1.6.0';
 
 /* ---------------------------------------------------------
    Atalhos DOM
@@ -919,14 +919,14 @@ function importarDB(buffer) {
    STATS / RODAPÉ
 --------------------------------------------------------- */
 function pintarConfigNuvem() {
-  var c = Nuvem.config();
-  $('nuvemUrl').value = c.url || '';
-  $('nuvemKey').value = c.key || '';
+  var ok = Nuvem.ativa();
   $('nuvemAparelho').textContent = Nuvem.aparelho();
-  $('btnNuvemSalvar').textContent = Nuvem.ativa() ? 'Atualizar conexão' : 'Conectar';
-  $('btnNuvemSync').classList.toggle('hidden', !Nuvem.ativa());
-  $('btnNuvemEnviar').classList.toggle('hidden', !Nuvem.ativa());
-  $('btnNuvemSair').classList.toggle('hidden', !Nuvem.ativa());
+  $('nuvemServidor').textContent = ok ? Nuvem.servidor() : '-';
+  $('nuvemAviso').textContent = ok
+    ? 'Este aparelho usa o banco oficial do almoxarifado, definido no cofre do app. Não há nada para configurar aqui.'
+    : 'Nenhum banco definido no cofre deste app. Gere o cofre em admin.html com a URL e a chave do Supabase.';
+  $('btnNuvemSync').classList.toggle('hidden', !ok);
+  $('btnNuvemEnviar').classList.toggle('hidden', !ok);
   atualizarStatusNuvem();
 }
 
@@ -966,44 +966,14 @@ function ligarEventos() {
 
   /* nuvem */
   $('nuvemDot').addEventListener('click', function () {
-    if (!Nuvem.ativa()) { mostrarView('dados'); toast('Configure a nuvem em Dados', 'err'); return; }
+    if (!Nuvem.ativa()) { mostrarView('dados'); toast('Banco da nuvem não vem no cofre deste app', 'err'); return; }
     sincronizar(false);
-  });
-
-  $('btnNuvemSalvar').addEventListener('click', function () {
-    var u = ($('nuvemUrl').value || '').trim();
-    var k = ($('nuvemKey').value || '').trim();
-    if (!u || !k) { toast('Preencha URL e chave anon', 'err'); return; }
-    Nuvem.salvarCfg(u, k);
-    pintarConfigNuvem();
-    nuvemStatus('Testando conexão...', 'sync');
-    Nuvem.testar().then(function () {
-      toast('Conectado à nuvem', 'ok');
-      /* base nova + itens so neste aparelho -> oferece a carga inicial */
-      var locais = sel('SELECT codigo,nome,descricao,unidade_medida,estoque_atual,estoque_minimo FROM itens ORDER BY codigo');
-      if (locais.length) {
-        return Nuvem.puxarItens().then(function (naNuvem) {
-          if (naNuvem.length) return sincronizar(false);
-          if (!confirm('A nuvem está vazia e este aparelho tem ' + locais.length +
-                       ' itens.\n\nEnviar esses itens para a nuvem agora?')) return false;
-          nuvemStatus('Enviando...', 'sync');
-          return Nuvem.enviarItens(locais, false).then(function () {
-            toast('Catálogo publicado na nuvem', 'ok');
-            return sincronizar(false);
-          });
-        });
-      }
-      return sincronizar(false);
-    }).catch(function (e) {
-      atualizarStatusNuvem();
-      toast('Não conectou: ' + e.message, 'err');
-    });
   });
 
   $('btnNuvemSync').addEventListener('click', function () { sincronizar(false); });
 
   $('btnNuvemEnviar').addEventListener('click', function () {
-    if (!Nuvem.ativa()) { toast('Configure a nuvem primeiro', 'err'); return; }
+    if (!Nuvem.ativa()) { toast('Nuvem indisponível: faça login no cofre', 'err'); return; }
     var lista = sel('SELECT codigo,nome,descricao,unidade_medida,estoque_atual,estoque_minimo FROM itens ORDER BY codigo');
     if (!lista.length) { toast('Nenhum item para enviar', 'err'); return; }
     if (!confirm('Enviar ' + lista.length + ' itens deste aparelho para a nuvem?\n\nItens que já existem lá NÃO são alterados.')) return;
@@ -1015,13 +985,6 @@ function ligarEventos() {
       atualizarStatusNuvem();
       toast('Falha ao enviar: ' + e.message, 'err');
     });
-  });
-
-  $('btnNuvemSair').addEventListener('click', function () {
-    if (!confirm('Desconectar este aparelho da nuvem?\n\nEle volta a gravar só localmente.')) return;
-    Nuvem.limpar();
-    pintarConfigNuvem();
-    toast('Desconectado da nuvem', 'ok');
   });
 
   /* estoque */
