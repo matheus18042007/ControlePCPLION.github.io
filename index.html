@@ -25,6 +25,7 @@
       <small id="topSub">carregando banco...</small>
     </div>
   </div>
+  <button id="nuvemDot" class="chip dot off" type="button" title="Situação da nuvem">●</button>
   <button id="btnOperador" class="chip" type="button" title="Operador">
     <span id="operadorLabel">operador</span>
   </button>
@@ -115,6 +116,21 @@
       <input type="file" id="fileCsv" accept=".csv,.txt" hidden>
       <button id="btnEscolherCsv" class="btn primary block" type="button">Escolher arquivo CSV</button>
       <div id="csvResultado" class="muted small"></div>
+    </div>
+
+    <div class="card">
+      <h3>Banco na nuvem (Supabase)</h3>
+      <p class="muted small">Liga este aparelho ao estoque compartilhado. Cole os dados do painel do Supabase em <em>Settings &rarr; API</em>.</p>
+      <div class="kv"><span>Situação</span><b id="nuvemEstado">Não configurado</b></div>
+      <div class="kv"><span>Aparelho</span><b id="nuvemAparelho">-</b></div>
+      <label class="lbl" for="nuvemUrl">Project URL</label>
+      <input id="nuvemUrl" type="url" inputmode="url" placeholder="https://xxxxx.supabase.co" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <label class="lbl" for="nuvemKey">Chave anon (public)</label>
+      <input id="nuvemKey" type="text" placeholder="eyJhbGciOi..." autocomplete="off" autocapitalize="off" spellcheck="false">
+      <button id="btnNuvemSalvar" class="btn primary block" type="button">Conectar</button>
+      <button id="btnNuvemSync" class="btn ghost block" type="button">🔄 Sincronizar agora</button>
+      <button id="btnNuvemEnviar" class="btn ghost block" type="button">⬆ Enviar itens deste aparelho para a nuvem</button>
+      <button id="btnNuvemSair" class="btn ghost block" type="button">Desconectar</button>
     </div>
 
     <div class="card">
@@ -226,6 +242,7 @@
 
 <script src="./vendor/sql-wasm.js"></script>
 <script src="./vendor/html5-qrcode.min.js"></script>
+<script src="./js/nuvem.js"></script>
 <script src="./js/app.js"></script>
 </body>
 </html>

@@ -8,13 +8,14 @@
    Para publicar uma atualização: mudar CACHE_VERSION abaixo.
    ============================================================ */
 
-var CACHE_VERSION = 'almox-pba-v1.0.0';
+var CACHE_VERSION = 'almox-pba-v1.2.0';
 
 var ARQUIVOS = [
   './',
   './index.html',
   './manifest.json',
   './css/styles.css',
+  './js/nuvem.js',
   './js/app.js',
   './vendor/sql-wasm.js',
   './vendor/sql-wasm.wasm',

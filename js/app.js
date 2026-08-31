@@ -5,7 +5,7 @@
 (function () {
 'use strict';
 
-var APP_VERSION = '1.0.0';
+var APP_VERSION = '1.2.0';
 
 /* ---------------------------------------------------------
    Atalhos DOM
@@ -185,6 +185,108 @@ function escalar(sql, params) {
 }
 
 /* ---------------------------------------------------------
+   SINCRONIZAÇÃO COM A NUVEM (Supabase)
+   A nuvem é a fonte oficial. O SQLite local vira um cache
+   de leitura, para o app abrir rápido e permitir consulta
+   mesmo se o sinal cair.
+--------------------------------------------------------- */
+function nuvemStatus(txt, cls) {
+  var d = $('nuvemDot'); if (d) d.className = 'chip dot ' + cls;
+  var e = $('nuvemEstado'); if (e) e.textContent = txt;
+}
+
+function atualizarStatusNuvem() {
+  if (!Nuvem.ativa()) { nuvemStatus('Não configurado (dados só neste aparelho)', 'off'); return; }
+  if (Nuvem.conectado()) nuvemStatus('Conectado', 'on');
+  else nuvemStatus('Sem conexão com a nuvem', 'err');
+}
+
+/* converte data ISO (UTC) da nuvem para o horário local */
+function paraLocal(iso) {
+  if (!iso) return agoraISO();
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  var p = function (x) { return String(x).padStart(2, '0'); };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
+         p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+}
+
+/* substitui o cache local pelo conteúdo da nuvem */
+function gravarCache(dados) {
+  db.run('BEGIN');
+  try {
+    db.run('DELETE FROM movimentacoes');
+    db.run('DELETE FROM itens');
+    dados.itens.forEach(function (it) {
+      db.run('INSERT INTO itens (codigo,nome,descricao,unidade_medida,estoque_atual,estoque_minimo,data_cadastro) VALUES (?,?,?,?,?,?,?)',
+        [it.codigo, it.nome, it.descricao || null, it.unidade_medida || 'UN',
+         Number(it.estoque_atual) || 0, Number(it.estoque_minimo) || 0, paraLocal(it.data_cadastro)]);
+    });
+    dados.movimentacoes.forEach(function (m) {
+      db.run('INSERT INTO movimentacoes (id,codigo_item,tipo,quantidade,data_hora,usuario,observacao) VALUES (?,?,?,?,?,?,?)',
+        [m.id, m.codigo_item, m.tipo, Number(m.quantidade) || 0,
+         paraLocal(m.data_hora), m.usuario || null, m.observacao || null]);
+    });
+    db.run('COMMIT');
+  } catch (e) {
+    try { db.run('ROLLBACK'); } catch (e2) {}
+    throw e;
+  }
+  salvar(true);
+}
+
+function repintar() {
+  atualizarStats();
+  if (estado.view === 'estoque') renderEstoque();
+  else if (estado.view === 'hist') renderHistorico();
+  else if (estado.view === 'item' && estado.itemAtual) abrirItem(estado.itemAtual.codigo);
+}
+
+function sincronizar(silencioso) {
+  if (!Nuvem.ativa()) { atualizarStatusNuvem(); return Promise.resolve(false); }
+  nuvemStatus('Sincronizando...', 'sync');
+  return Nuvem.puxarTudo().then(function (d) {
+    /* trava de seguranca: nuvem vazia NUNCA apaga o que existe neste aparelho.
+       Acontece ao conectar pela 1a vez numa base nova - os dados locais
+       precisam ser enviados antes (botao "Enviar itens deste aparelho"). */
+    if (!d.itens.length && escalar('SELECT COUNT(*) FROM itens') > 0) {
+      atualizarStatusNuvem();
+      if (!silencioso) toast('A nuvem está vazia. Envie os itens deste aparelho primeiro.', 'err');
+      return false;
+    }
+    gravarCache(d);
+    atualizarStatusNuvem();
+    repintar();
+    if (!silencioso) toast('Sincronizado • ' + d.itens.length + ' itens', 'ok');
+    return true;
+  }).catch(function (e) {
+    atualizarStatusNuvem();
+    if (!silencioso) toast('Falha ao sincronizar: ' + e.message, 'err');
+    return false;
+  });
+}
+
+/* aplica no cache local o item devolvido pela nuvem */
+function itemDaResposta(r) {
+  if (!r) return null;
+  return Array.isArray(r) ? (r[0] || null) : r;
+}
+
+function upsertLocal(it) {
+  if (!it) return;
+  var ex = um('SELECT codigo FROM itens WHERE codigo=$c', { $c: it.codigo });
+  if (ex) {
+    db.run('UPDATE itens SET nome=?,descricao=?,unidade_medida=?,estoque_atual=?,estoque_minimo=? WHERE codigo=?',
+      [it.nome, it.descricao || null, it.unidade_medida || 'UN',
+       Number(it.estoque_atual) || 0, Number(it.estoque_minimo) || 0, it.codigo]);
+  } else {
+    db.run('INSERT INTO itens (codigo,nome,descricao,unidade_medida,estoque_atual,estoque_minimo,data_cadastro) VALUES (?,?,?,?,?,?,?)',
+      [it.codigo, it.nome, it.descricao || null, it.unidade_medida || 'UN',
+       Number(it.estoque_atual) || 0, Number(it.estoque_minimo) || 0, paraLocal(it.data_cadastro)]);
+  }
+}
+
+/* ---------------------------------------------------------
    Estado da UI
 --------------------------------------------------------- */
 var estado = {
@@ -322,6 +424,22 @@ function abrirItem(codigo) {
     : '<div class="vazio">Nenhuma movimentação registrada.</div>';
 
   mostrarView('item');
+
+  /* confere o saldo oficial na nuvem antes do operador dar baixa */
+  if (Nuvem.ativa() && !estado.conferindo) {
+    estado.conferindo = true;
+    Nuvem.puxarItem(it.codigo).then(function (n) {
+      estado.conferindo = false;
+      atualizarStatusNuvem();
+      if (!n) return;
+      var mudou = Number(n.estoque_atual) !== saldo;
+      upsertLocal(n);
+      if (mudou) {
+        salvar(true);
+        if (estado.view === 'item' && estado.itemAtual && estado.itemAtual.codigo === it.codigo) abrirItem(it.codigo);
+      }
+    }).catch(function () { estado.conferindo = false; atualizarStatusNuvem(); });
+  }
 }
 
 function linhaMov(m, comNome) {
@@ -396,6 +514,42 @@ function confirmarMov() {
   }
 
   var obs = ($('movObs').value || '').trim();
+
+  /* ---- com nuvem: a gravação oficial é no servidor ---- */
+  if (Nuvem.ativa()) {
+    var btn = $('btnMovConfirmar');
+    var rotulo = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Gravando na nuvem...';
+
+    Nuvem.registrarMov(it.codigo, estado.movTipo, q, operador(), obs, true)
+      .then(function (r) {
+        var novoItem = itemDaResposta(r);
+        var saldoFinal = novoItem ? Number(novoItem.estoque_atual) : novo;
+        upsertLocal(novoItem || { codigo: it.codigo, nome: it.nome, descricao: it.descricao,
+                                  unidade_medida: it.unidade_medida, estoque_atual: saldoFinal,
+                                  estoque_minimo: it.estoque_minimo });
+        db.run('INSERT INTO movimentacoes (codigo_item,tipo,quantidade,data_hora,usuario,observacao) VALUES (?,?,?,?,?,?)',
+          [it.codigo, estado.movTipo, q, agoraISO(), operador() || null, obs || null]);
+        salvar(true);
+        atualizarStatusNuvem();
+        fecharSheets();
+        vibrar(60);
+        bip(ent ? 1046 : 700, 0.1);
+        toast((ent ? 'Entrada' : 'Saída') + ' de ' + fmtNum(q) + ' registrada. Saldo: ' + fmtNum(saldoFinal), 'ok');
+        abrirItem(it.codigo);
+      })
+      .catch(function (e) {
+        atualizarStatusNuvem();
+        vibrar([80, 60, 80]);
+        bip(220, 0.25);
+        toast('NÃO gravado: ' + e.message, 'err');
+      })
+      .then(function () { btn.disabled = false; btn.textContent = rotulo; });
+    return;
+  }
+
+  /* ---- sem nuvem: só neste aparelho ---- */
   try {
     db.run('BEGIN');
     db.run('INSERT INTO movimentacoes (codigo_item,tipo,quantidade,data_hora,usuario,observacao) VALUES (?,?,?,?,?,?)',
@@ -448,6 +602,34 @@ function salvarCadastro() {
   var un = ($('cadUnidade').value || 'UN').trim().toUpperCase();
   var min = parseNum($('cadMinimo').value);
 
+  /* ---- com nuvem ---- */
+  if (Nuvem.ativa()) {
+    var btnC = $('btnCadSalvar');
+    var rotC = btnC.textContent;
+    btnC.disabled = true; btnC.textContent = 'Salvando...';
+
+    var acao = estado.editando
+      ? Nuvem.editarItem(cod, { nome: nome, descricao: desc, unidade_medida: un, estoque_minimo: min })
+      : Nuvem.cadastrarItem({ codigo: cod, nome: nome, descricao: desc, unidade_medida: un,
+                              estoque_atual: parseNum($('cadSaldo').value), estoque_minimo: min }, operador());
+
+    acao.then(function (r) {
+      upsertLocal(itemDaResposta(r) || { codigo: cod, nome: nome, descricao: desc,
+        unidade_medida: un, estoque_atual: parseNum($('cadSaldo').value), estoque_minimo: min });
+      salvar(true);
+      atualizarStatusNuvem();
+      fecharSheets();
+      toast('Item salvo na nuvem', 'ok');
+      if (!estado.editando) sincronizar(true);
+      abrirItem(cod);
+    }).catch(function (e) {
+      atualizarStatusNuvem();
+      toast('NÃO salvo: ' + e.message, 'err');
+    }).then(function () { btnC.disabled = false; btnC.textContent = rotC; });
+    return;
+  }
+
+  /* ---- sem nuvem ---- */
   try {
     if (estado.editando) {
       db.run('UPDATE itens SET nome=?,descricao=?,unidade_medida=?,estoque_minimo=? WHERE codigo=?',
@@ -609,6 +791,7 @@ function importarCSV(texto) {
   if (iNome === -1) iNome = (iCod === 0 ? 1 : 0);
 
   var novos = 0, atualizados = 0, ignorados = 0;
+  var paraNuvem = [];
   var atualizaSaldo = $('csvAtualizaSaldo').checked;
   var v = function (l, i) { return (i > -1 && i < l.length) ? String(l[i]).trim() : ''; };
 
@@ -623,6 +806,9 @@ function importarCSV(texto) {
       var un = (v(l, iUn) || 'UN').toUpperCase();
       var saldo = iSal > -1 ? parseNum(v(l, iSal)) : 0;
       var min = iMin > -1 ? parseNum(v(l, iMin)) : 0;
+
+      paraNuvem.push({ codigo: cod, nome: nome, descricao: desc, unidade_medida: un,
+                       estoque_atual: saldo, estoque_minimo: min });
 
       var existe = um('SELECT codigo FROM itens WHERE codigo=$c', { $c: cod });
       if (existe) {
@@ -652,6 +838,18 @@ function importarCSV(texto) {
     '</b> atualizados' + (ignorados ? ' • ' + ignorados + ' ignorados' : '');
   toast('Importação concluída: ' + novos + ' novos', 'ok');
   atualizarStats();
+
+  if (Nuvem.ativa() && paraNuvem.length) {
+    $('csvResultado').innerHTML += ' • enviando para a nuvem...';
+    Nuvem.enviarItens(paraNuvem, atualizaSaldo).then(function () {
+      $('csvResultado').innerHTML = '✅ <b>' + paraNuvem.length + '</b> itens enviados para a nuvem';
+      toast('Catálogo publicado na nuvem', 'ok');
+      return sincronizar(true);
+    }).catch(function (e) {
+      $('csvResultado').innerHTML = '⚠️ Importado só neste aparelho — a nuvem recusou: ' + esc(e.message);
+      toast('Não subiu para a nuvem: ' + e.message, 'err');
+    });
+  }
 }
 
 /* ---------------------------------------------------------
@@ -712,6 +910,18 @@ function importarDB(buffer) {
 /* ---------------------------------------------------------
    STATS / RODAPÉ
 --------------------------------------------------------- */
+function pintarConfigNuvem() {
+  var c = Nuvem.config();
+  $('nuvemUrl').value = c.url || '';
+  $('nuvemKey').value = c.key || '';
+  $('nuvemAparelho').textContent = Nuvem.aparelho();
+  $('btnNuvemSalvar').textContent = Nuvem.ativa() ? 'Atualizar conexão' : 'Conectar';
+  $('btnNuvemSync').classList.toggle('hidden', !Nuvem.ativa());
+  $('btnNuvemEnviar').classList.toggle('hidden', !Nuvem.ativa());
+  $('btnNuvemSair').classList.toggle('hidden', !Nuvem.ativa());
+  atualizarStatusNuvem();
+}
+
 function atualizarStats() {
   var ni = escalar('SELECT COUNT(*) FROM itens');
   var nm = escalar('SELECT COUNT(*) FROM movimentacoes');
@@ -734,6 +944,66 @@ function ligarEventos() {
   $('btnOperador').addEventListener('click', function () {
     var n = prompt('Nome do operador (aparece no histórico):', operador());
     if (n !== null) { localStorage.setItem('operador', n.trim()); atualizarStats(); }
+  });
+
+  /* nuvem */
+  $('nuvemDot').addEventListener('click', function () {
+    if (!Nuvem.ativa()) { mostrarView('dados'); toast('Configure a nuvem em Dados', 'err'); return; }
+    sincronizar(false);
+  });
+
+  $('btnNuvemSalvar').addEventListener('click', function () {
+    var u = ($('nuvemUrl').value || '').trim();
+    var k = ($('nuvemKey').value || '').trim();
+    if (!u || !k) { toast('Preencha URL e chave anon', 'err'); return; }
+    Nuvem.salvarCfg(u, k);
+    pintarConfigNuvem();
+    nuvemStatus('Testando conexão...', 'sync');
+    Nuvem.testar().then(function () {
+      toast('Conectado à nuvem', 'ok');
+      /* base nova + itens so neste aparelho -> oferece a carga inicial */
+      var locais = sel('SELECT codigo,nome,descricao,unidade_medida,estoque_atual,estoque_minimo FROM itens ORDER BY codigo');
+      if (locais.length) {
+        return Nuvem.puxarItens().then(function (naNuvem) {
+          if (naNuvem.length) return sincronizar(false);
+          if (!confirm('A nuvem está vazia e este aparelho tem ' + locais.length +
+                       ' itens.\n\nEnviar esses itens para a nuvem agora?')) return false;
+          nuvemStatus('Enviando...', 'sync');
+          return Nuvem.enviarItens(locais, false).then(function () {
+            toast('Catálogo publicado na nuvem', 'ok');
+            return sincronizar(false);
+          });
+        });
+      }
+      return sincronizar(false);
+    }).catch(function (e) {
+      atualizarStatusNuvem();
+      toast('Não conectou: ' + e.message, 'err');
+    });
+  });
+
+  $('btnNuvemSync').addEventListener('click', function () { sincronizar(false); });
+
+  $('btnNuvemEnviar').addEventListener('click', function () {
+    if (!Nuvem.ativa()) { toast('Configure a nuvem primeiro', 'err'); return; }
+    var lista = sel('SELECT codigo,nome,descricao,unidade_medida,estoque_atual,estoque_minimo FROM itens ORDER BY codigo');
+    if (!lista.length) { toast('Nenhum item para enviar', 'err'); return; }
+    if (!confirm('Enviar ' + lista.length + ' itens deste aparelho para a nuvem?\n\nItens que já existem lá NÃO são alterados.')) return;
+    nuvemStatus('Enviando...', 'sync');
+    Nuvem.enviarItens(lista, false).then(function () {
+      toast('Itens enviados', 'ok');
+      return sincronizar(false);
+    }).catch(function (e) {
+      atualizarStatusNuvem();
+      toast('Falha ao enviar: ' + e.message, 'err');
+    });
+  });
+
+  $('btnNuvemSair').addEventListener('click', function () {
+    if (!confirm('Desconectar este aparelho da nuvem?\n\nEle volta a gravar só localmente.')) return;
+    Nuvem.limpar();
+    pintarConfigNuvem();
+    toast('Desconectado da nuvem', 'ok');
   });
 
   /* estoque */
@@ -836,7 +1106,10 @@ function ligarEventos() {
   $('btnExportCsvItens').addEventListener('click', exportarItensCSV);
   $('btnExportCsvMov').addEventListener('click', exportarMovCSV);
   $('btnZerar').addEventListener('click', function () {
-    if (!confirm('Apagar TODOS os itens e movimentações deste aparelho?')) return;
+    var aviso = Nuvem.ativa()
+      ? 'Apagar os dados DESTE APARELHO?\n\nA nuvem NÃO é apagada — na próxima sincronização tudo volta.'
+      : 'Apagar TODOS os itens e movimentações deste aparelho?';
+    if (!confirm(aviso)) return;
     if (!confirm('Tem certeza? Exporte o backup antes. Esta ação não pode ser desfeita.')) return;
     db.run('DELETE FROM movimentacoes; DELETE FROM itens; DELETE FROM sqlite_sequence WHERE name="movimentacoes";');
     salvar(true);
@@ -871,10 +1144,15 @@ function ligarEventos() {
     deferred.userChoice.then(function () { deferred = null; $('btnInstalar').classList.add('hidden'); });
   });
 
-  /* segurança: salva ao sair */
+  /* segurança: salva ao sair; ao voltar, busca o que mudou na nuvem */
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') { pararScanner(); salvar(true); }
+    else sincronizar(true);
   });
+
+  /* reconectou o sinal -> puxa o estoque atualizado */
+  window.addEventListener('online', function () { sincronizar(true); });
+  window.addEventListener('offline', atualizarStatusNuvem);
 }
 
 /* ---------------------------------------------------------
@@ -906,11 +1184,14 @@ function registrarSW() {
    BOOT
 --------------------------------------------------------- */
 iniciarSQL().then(function () {
+  Nuvem.carregar();
   ligarEventos();
+  pintarConfigNuvem();
   atualizarStats();
   renderEstoque();
   $('splash').classList.add('hide');
   registrarSW();
+  sincronizar(true);
   // atalho do ícone do app: abrir direto no scanner
   try {
     if (new URLSearchParams(location.search).get('acao') === 'scan') mostrarView('scan');

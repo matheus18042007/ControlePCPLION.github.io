@@ -63,6 +63,12 @@ code{background:#0b0f14;padding:1px 5px;border-radius:5px;font-size:12px;color:v
   border-radius:999px;padding:8px 14px;font-size:13px;max-width:40vw;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
+.chip.dot{padding:8px 10px;font-size:15px;line-height:1;margin-right:6px}
+.chip.dot.on{color:var(--ok)}
+.chip.dot.off{color:var(--muted)}
+.chip.dot.err{color:var(--danger)}
+.chip.dot.sync{color:var(--accent);animation:pisca 1s linear infinite}
+@keyframes pisca{50%{opacity:.25}}
 
 /* ---------- layout ---------- */
 #main{padding:12px 14px calc(var(--tabh) + var(--safe-b) + 20px)}

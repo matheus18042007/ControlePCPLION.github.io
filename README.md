@@ -78,6 +78,34 @@ recarrega sozinho; também há o botão **🔄 Procurar atualização** na aba *
 
 ---
 
+## 3.1 Estoque compartilhado entre celulares (Supabase — grátis)
+
+Sem isso, **cada aparelho tem o próprio estoque**. Com isso, todos veem o mesmo saldo.
+
+1. Crie a conta em <https://supabase.com> → **New project** (guarde a senha do banco).
+2. No painel: **SQL Editor** → cole TUDO do arquivo `supabase.sql` → **Run**.
+3. No painel: **Settings → API** → copie **Project URL** e a chave **anon public**.
+4. No app (em cada celular): aba **Dados** → *Banco na nuvem* → cole os dois campos → **Conectar**.
+   - No primeiro aparelho, ele pergunta se quer **enviar o catálogo** para a nuvem. Aceite.
+   - Nos demais, o estoque desce da nuvem automaticamente.
+
+Como funciona:
+
+- Toda entrada/saída vai **direto ao servidor**, dentro de uma transação que trava a linha
+  do item (`select ... for update`). Dois celulares dando baixa no mesmo instante **não**
+  se sobrescrevem — as quantidades se somam corretamente.
+- Ao abrir um item, o app **confere o saldo oficial** na nuvem antes de deixar movimentar.
+- O SQLite local vira só **cache de leitura** (abre rápido e permite consultar sem sinal).
+- **Sem sinal, a baixa não é gravada** e o app avisa `NÃO gravado` — nada de saldo fantasma.
+  O ponto verde/vermelho no topo mostra a situação da conexão; toque nele para sincronizar.
+- A nuvem **nunca apaga** os itens do aparelho: se ela estiver vazia, o app pede que você
+  envie os dados primeiro.
+
+O histórico na nuvem é *append-only* (a política de segurança não permite apagar nem editar
+movimentação pelo celular) — some só pelo painel do Supabase.
+
+---
+
 ## 4. Como usar
 
 | Aba | Função |
