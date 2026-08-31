@@ -108,6 +108,12 @@ Sem isso, **cada aparelho tem o próprio estoque**. Com isso, todos veem o mesmo
    - O botão **Desconectar** deixa aquele aparelho só local, e ele *não* volta a se conectar
      sozinho; para religar, use **Conectar** naquele celular.
 
+   **Tamanho da base:** o Supabase corta toda resposta em 1000 linhas, então o app baixa
+   em páginas até acabar — o catálogo desce inteiro, com 500 ou 50.000 itens (durante a
+   descida o status mostra o andamento). Do histórico ele traz as **5.000 movimentações
+   mais recentes**; as antigas continuam guardadas na nuvem e aparecem no painel do
+   Supabase.
+
 Como funciona:
 
 - Toda entrada/saída vai **direto ao servidor**, dentro de uma transação que trava a linha

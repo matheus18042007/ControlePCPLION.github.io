@@ -8,7 +8,7 @@
    Para publicar uma atualização: mudar CACHE_VERSION abaixo.
    ============================================================ */
 
-var CACHE_VERSION = 'almox-pba-v1.3.0';
+var CACHE_VERSION = 'almox-pba-v1.4.0';
 
 var ARQUIVOS = [
   './',

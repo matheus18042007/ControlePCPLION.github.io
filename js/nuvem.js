@@ -112,8 +112,36 @@ var Nuvem = (function () {
     return req('/itens?select=codigo&limit=1').then(function () { return true; });
   }
 
-  function puxarItens() {
-    return req('/itens?select=*&order=codigo');
+  /* O Supabase corta toda resposta em 1000 linhas (db-max-rows), mesmo
+     pedindo mais. Entao buscamos de pagina em pagina ate acabar.
+     A ordenacao precisa ser estavel para o offset nao repetir/pular linha. */
+  var PAGINA = 1000;
+
+  function puxarPaginado(caminho, limiteTotal, aoProgredir) {
+    var tudo = [];
+    var teto = limiteTotal || Infinity;
+
+    function proxima(offset) {
+      var falta = teto - tudo.length;
+      if (falta <= 0) return Promise.resolve(tudo);
+      var tam = Math.min(PAGINA, falta);
+
+      return req(caminho + '&limit=' + tam + '&offset=' + offset, { timeout: 30000 })
+        .then(function (lote) {
+          lote = lote || [];
+          tudo = tudo.concat(lote);
+          if (aoProgredir) aoProgredir(tudo.length);
+          /* pagina incompleta = chegou ao fim */
+          if (lote.length < tam) return tudo;
+          return proxima(offset + lote.length);
+        });
+    }
+
+    return proxima(0);
+  }
+
+  function puxarItens(aoProgredir) {
+    return puxarPaginado('/itens?select=*&order=codigo', null, aoProgredir);
   }
 
   /* saldo oficial de um item só (rápido, usado ao abrir o item) */
@@ -122,13 +150,22 @@ var Nuvem = (function () {
       .then(function (r) { return (r && r.length) ? r[0] : null; });
   }
 
-  function puxarMovimentacoes(limite) {
-    return req('/movimentacoes?select=*&order=id.desc&limit=' + (limite || 3000));
+  /* historico: so o mais recente vale a pena no celular (o resto fica na nuvem) */
+  function puxarMovimentacoes(limite, aoProgredir) {
+    return puxarPaginado('/movimentacoes?select=*&order=id.desc', limite || 5000, aoProgredir);
   }
 
-  function puxarTudo(limiteMov) {
-    return Promise.all([puxarItens(), puxarMovimentacoes(limiteMov)])
-      .then(function (r) { return { itens: r[0] || [], movimentacoes: r[1] || [] }; });
+  function puxarTudo(limiteMov, aoProgredir) {
+    var nItens = 0, nMov = 0;
+    var passo = aoProgredir ? function () { aoProgredir(nItens, nMov); } : null;
+
+    return puxarItens(function (n) { nItens = n; if (passo) passo(); })
+      .then(function (itens) {
+        return puxarMovimentacoes(limiteMov, function (n) { nMov = n; if (passo) passo(); })
+          .then(function (movs) {
+            return { itens: itens || [], movimentacoes: movs || [] };
+          });
+      });
   }
 
   /* ---------- escrita ---------- */

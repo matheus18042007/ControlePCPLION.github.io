@@ -5,7 +5,7 @@
 (function () {
 'use strict';
 
-var APP_VERSION = '1.3.0';
+var APP_VERSION = '1.4.0';
 
 /* ---------------------------------------------------------
    Atalhos DOM
@@ -245,7 +245,11 @@ function repintar() {
 function sincronizar(silencioso) {
   if (!Nuvem.ativa()) { atualizarStatusNuvem(); return Promise.resolve(false); }
   nuvemStatus('Sincronizando...', 'sync');
-  return Nuvem.puxarTudo().then(function (d) {
+  /* com muitos itens a descida vem em varias paginas - mostra o andamento */
+  var progresso = function (nItens, nMov) {
+    nuvemStatus('Baixando... ' + nItens + ' itens' + (nMov ? ' • ' + nMov + ' mov.' : ''), 'sync');
+  };
+  return Nuvem.puxarTudo(null, progresso).then(function (d) {
     /* trava de seguranca: nuvem vazia NUNCA apaga o que existe neste aparelho.
        Acontece ao conectar pela 1a vez numa base nova - os dados locais
        precisam ser enviados antes (botao "Enviar itens deste aparelho"). */
