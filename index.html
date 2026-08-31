@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>Almoxarifado PBA</title>
+<meta name="description" content="Controle de estoque por QR Code - almoxarifado PBA">
+<meta name="theme-color" content="#0f1419">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Almox PBA">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">PBA</span>
+    <div class="brand-txt">
+      <strong id="topTitle">Almoxarifado</strong>
+      <small id="topSub">carregando banco...</small>
+    </div>
+  </div>
+  <button id="btnOperador" class="chip" type="button" title="Operador">
+    <span id="operadorLabel">operador</span>
+  </button>
+</header>
+
+<main id="main">
+
+  <!-- ================= ESTOQUE ================= -->
+  <section id="view-estoque" class="view active">
+    <div class="searchbar">
+      <input id="buscaEstoque" type="search" inputmode="search" placeholder="Buscar por código ou nome..." autocomplete="off">
+      <button id="btnLimpaBusca" class="icon-btn" type="button" aria-label="Limpar">&times;</button>
+    </div>
+    <div class="filters">
+      <button class="pill active" data-estoquefiltro="todos" type="button">Todos</button>
+      <button class="pill" data-estoquefiltro="baixo" type="button">Estoque baixo</button>
+      <button class="pill" data-estoquefiltro="zerado" type="button">Zerados</button>
+      <span class="grow"></span>
+      <span id="resumoEstoque" class="muted small"></span>
+    </div>
+    <div id="listaEstoque" class="list"></div>
+  </section>
+
+  <!-- ================= SCANNER ================= -->
+  <section id="view-scan" class="view">
+    <div id="reader" class="reader"></div>
+    <div id="scanHint" class="scan-hint">Aponte a câmera para o QR Code do item</div>
+    <div class="scan-actions">
+      <button id="btnScanStart" class="btn primary big" type="button">Ligar câmera</button>
+      <button id="btnScanStop" class="btn ghost big hidden" type="button">Parar câmera</button>
+    </div>
+    <div class="manual-box">
+      <label class="lbl" for="codigoManual">Ou digite o código manualmente</label>
+      <div class="row">
+        <input id="codigoManual" type="text" placeholder="Ex.: ACAD-000001" autocomplete="off" autocapitalize="characters">
+        <button id="btnBuscarManual" class="btn primary" type="button">Abrir</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ITEM ================= -->
+  <section id="view-item" class="view">
+    <button class="back" id="btnVoltarItem" type="button">&larr; Voltar</button>
+    <div class="card item-card">
+      <div class="item-code" id="itemCodigo">-</div>
+      <h2 id="itemNome">-</h2>
+      <p id="itemDescricao" class="muted"></p>
+      <div class="saldo-box">
+        <span class="saldo-label">Estoque atual</span>
+        <div class="saldo-valor"><span id="itemSaldo">0</span> <small id="itemUnidade">UN</small></div>
+        <span id="itemMinimo" class="muted small"></span>
+      </div>
+      <div class="acoes">
+        <button id="btnEntrada" class="btn entrada big" type="button">➕ Entrada</button>
+        <button id="btnSaida" class="btn saida big" type="button">➖ Saída</button>
+      </div>
+      <button id="btnEditarItem" class="btn ghost block" type="button">Editar cadastro</button>
+    </div>
+    <h3 class="section-title">Últimas movimentações</h3>
+    <div id="itemHistorico" class="list"></div>
+  </section>
+
+  <!-- ================= HISTÓRICO ================= -->
+  <section id="view-hist" class="view">
+    <div class="searchbar">
+      <input id="buscaHist" type="search" placeholder="Filtrar por código, nome, obs..." autocomplete="off">
+    </div>
+    <div class="filters">
+      <button class="pill active" data-histtipo="TODOS" type="button">Tudo</button>
+      <button class="pill" data-histtipo="ENTRADA" type="button">Entradas</button>
+      <button class="pill" data-histtipo="SAIDA" type="button">Saídas</button>
+    </div>
+    <div class="filters">
+      <button class="pill active" data-histper="0" type="button">Sempre</button>
+      <button class="pill" data-histper="1" type="button">Hoje</button>
+      <button class="pill" data-histper="7" type="button">7 dias</button>
+      <button class="pill" data-histper="30" type="button">30 dias</button>
+    </div>
+    <div id="listaHist" class="list"></div>
+  </section>
+
+  <!-- ================= DADOS ================= -->
+  <section id="view-dados" class="view">
+    <div class="card">
+      <h3>Importar itens (CSV)</h3>
+      <p class="muted small">Colunas aceitas: <code>codigo;nome;descricao;unidade_medida;estoque_atual;estoque_minimo</code>. Separador <code>;</code> ou <code>,</code>.</p>
+      <label class="check"><input type="checkbox" id="csvAtualizaSaldo"> Atualizar saldo dos itens já existentes</label>
+      <input type="file" id="fileCsv" accept=".csv,.txt" hidden>
+      <button id="btnEscolherCsv" class="btn primary block" type="button">Escolher arquivo CSV</button>
+      <div id="csvResultado" class="muted small"></div>
+    </div>
+
+    <div class="card">
+      <h3>Cadastro manual</h3>
+      <button id="btnNovoItem" class="btn ghost block" type="button">+ Novo item</button>
+    </div>
+
+    <div class="card">
+      <h3>Exportar / Sincronizar</h3>
+      <p class="muted small">Gere o arquivo para levar ao PC. O download vai para a pasta <em>Downloads</em> do celular.</p>
+      <button id="btnExportDb" class="btn primary block" type="button">⬇ Exportar banco (.db SQLite)</button>
+      <button id="btnExportCsvItens" class="btn ghost block" type="button">⬇ Exportar itens (.csv)</button>
+      <button id="btnExportCsvMov" class="btn ghost block" type="button">⬇ Exportar movimentações (.csv)</button>
+    </div>
+
+    <div class="card">
+      <h3>Importar banco (.db)</h3>
+      <p class="muted small warn">Substitui todos os dados atuais deste aparelho.</p>
+      <input type="file" id="fileDb" accept=".db,.sqlite,.sqlite3" hidden>
+      <button id="btnEscolherDb" class="btn ghost block" type="button">Escolher arquivo .db</button>
+    </div>
+
+    <div class="card">
+      <h3>Aplicativo</h3>
+      <div class="kv"><span>Versão</span><b id="appVersao">-</b></div>
+      <div class="kv"><span>Itens</span><b id="statItens">0</b></div>
+      <div class="kv"><span>Movimentações</span><b id="statMov">0</b></div>
+      <div class="kv"><span>Último salvamento</span><b id="statSalvo">-</b></div>
+      <button id="btnInstalar" class="btn primary block hidden" type="button">📲 Instalar na tela inicial</button>
+      <button id="btnAtualizar" class="btn ghost block" type="button">🔄 Procurar atualização</button>
+      <button id="btnZerar" class="btn danger block" type="button">🗑 Apagar todos os dados</button>
+    </div>
+  </section>
+</main>
+
+<nav class="tabbar">
+  <button class="tab active" data-view="estoque" type="button"><span>📦</span>Estoque</button>
+  <button class="tab" data-view="scan" type="button"><span>⛶</span>Escanear</button>
+  <button class="tab" data-view="hist" type="button"><span>🕘</span>Histórico</button>
+  <button class="tab" data-view="dados" type="button"><span>⚙</span>Dados</button>
+</nav>
+
+<!-- ================= SHEET MOVIMENTAÇÃO ================= -->
+<div id="sheetMov" class="sheet-wrap">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h3 id="movTitulo">Entrada</h3>
+    <div class="mov-item">
+      <b id="movNome">-</b>
+      <small id="movSaldoAtual" class="muted"></small>
+    </div>
+    <label class="lbl" for="movQtd">Quantidade</label>
+    <div class="qty">
+      <button class="qty-btn" data-qty="-1" type="button">−</button>
+      <input id="movQtd" type="number" inputmode="decimal" step="any" min="0" value="1">
+      <button class="qty-btn" data-qty="1" type="button">+</button>
+    </div>
+    <div class="quick-qty">
+      <button type="button" data-setqty="1">1</button>
+      <button type="button" data-setqty="5">5</button>
+      <button type="button" data-setqty="10">10</button>
+      <button type="button" data-setqty="50">50</button>
+      <button type="button" data-setqty="100">100</button>
+    </div>
+    <label class="lbl" for="movObs">Observação (opcional)</label>
+    <input id="movObs" type="text" placeholder="Nº da OS, fornecedor, motivo...">
+    <div id="movPrevia" class="previa"></div>
+    <div class="sheet-actions">
+      <button id="btnMovCancelar" class="btn ghost" type="button">Cancelar</button>
+      <button id="btnMovConfirmar" class="btn primary" type="button">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SHEET CADASTRO ================= -->
+<div id="sheetItem" class="sheet-wrap">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h3 id="cadTitulo">Novo item</h3>
+    <label class="lbl" for="cadCodigo">Código *</label>
+    <input id="cadCodigo" type="text" autocapitalize="characters" autocomplete="off">
+    <label class="lbl" for="cadNome">Nome *</label>
+    <input id="cadNome" type="text" autocomplete="off">
+    <label class="lbl" for="cadDesc">Descrição</label>
+    <input id="cadDesc" type="text" autocomplete="off">
+    <div class="row">
+      <div class="col">
+        <label class="lbl" for="cadUnidade">Unidade</label>
+        <input id="cadUnidade" type="text" value="UN" autocapitalize="characters">
+      </div>
+      <div class="col">
+        <label class="lbl" for="cadMinimo">Estoque mínimo</label>
+        <input id="cadMinimo" type="number" step="any" value="0">
+      </div>
+    </div>
+    <div id="cadSaldoWrap">
+      <label class="lbl" for="cadSaldo">Estoque inicial</label>
+      <input id="cadSaldo" type="number" step="any" value="0">
+    </div>
+    <div class="sheet-actions">
+      <button id="btnCadCancelar" class="btn ghost" type="button">Cancelar</button>
+      <button id="btnCadSalvar" class="btn primary" type="button">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<div id="splash" class="splash"><div class="spinner"></div><span>Preparando banco de dados...</span></div>
+
+<script src="./vendor/sql-wasm.js"></script>
+<script src="./vendor/html5-qrcode.min.js"></script>
+<script src="./js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+codigo;nome;descricao;unidade_medida;estoque_atual;estoque_minimo
+ACAD-000001;Parafuso sextavado M8x40;Aço zincado;UN;250;50
+ACAD-000002;Porca M8;Aço zincado;UN;480;100
+ACAD-000003;Arruela lisa 8mm;;UN;600;100
+ACAD-000004;Cabo flexível 2,5mm² preto;Rolo 100m;M;340;50
+ACAD-000005;Disjuntor bipolar 25A;Curva C;UN;12;4
+ACAD-000006;Graxa industrial EP2;Balde 20kg;KG;40;10
+ACAD-000007;Fita isolante 19mm x 20m;;UN;35;10
+ACAD-000008;Rolamento 6204 ZZ;;UN;8;6
+ACAD-000009;Óleo hidráulico ISO 68;Tambor 200L;L;180;60
+ACAD-000010;Luva de segurança tam. G;Par;UN;95;30

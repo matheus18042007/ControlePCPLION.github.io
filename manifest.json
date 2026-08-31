@@ -1,0 +1,28 @@
+{
+  "name": "Almoxarifado PBA - Estoque QR",
+  "short_name": "Almox PBA",
+  "description": "Controle de entrada e saída de estoque por leitura de QR Code, com banco SQLite local e funcionamento offline.",
+  "id": "almoxarifado-pba",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1419",
+  "theme_color": "#0f1419",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Escanear QR Code",
+      "short_name": "Escanear",
+      "url": "./index.html?acao=scan",
+      "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
