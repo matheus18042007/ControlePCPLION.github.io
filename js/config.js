@@ -16,6 +16,6 @@
    Depois de preencher, salve o arquivo e publique no GitHub.
    ========================================================= */
 var NUVEM_PADRAO = {
-  url: 'https://supabase.com/dashboard/project/nzrclbiypjexstlepiby/settings/api-keys/legacy',
+  url: '  https://nzrclbiypjexstlepiby.supabase.co',
   key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56cmNsYml5cGpleHN0bGVwaWJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxODQwNjUsImV4cCI6MjEwMzc2MDA2NX0.48hgHGUPFDz_Kyn8Pdclmv69oaZ2hTqy5wsNqIo1_Ck'
 };
