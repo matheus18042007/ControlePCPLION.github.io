@@ -9,6 +9,16 @@ var Nuvem = (function () {
   var cfg = { url: '', key: '' };
   var online = false;          // ultima chamada deu certo?
   var CHAVE_CFG = 'nuvem_cfg';
+  var CHAVE_OFF = 'nuvem_desligada';   // aparelho que escolheu ficar so local
+
+  /* config publicada junto com o app (js/config.js) */
+  function padrao() {
+    var p = (typeof NUVEM_PADRAO !== 'undefined') ? NUVEM_PADRAO : null;
+    if (!p) return null;
+    var u = (p.url || '').trim().replace(/\/+$/, '');
+    var k = (p.key || '').trim();
+    return (u && k) ? { url: u, key: k } : null;
+  }
 
   function carregar() {
     try {
@@ -16,6 +26,15 @@ var Nuvem = (function () {
       cfg.url = (c.url || '').replace(/\/+$/, '');
       cfg.key = c.key || '';
     } catch (e) { cfg = { url: '', key: '' }; }
+
+    /* nada salvo neste aparelho -> adota a config publicada,
+       a menos que o usuario tenha desconectado de proposito */
+    if (!cfg.url || !cfg.key) {
+      var p = padrao();
+      if (p && localStorage.getItem(CHAVE_OFF) !== '1') {
+        cfg.url = p.url; cfg.key = p.key;
+      }
+    }
     return cfg;
   }
 
@@ -23,12 +42,15 @@ var Nuvem = (function () {
     cfg.url = (url || '').trim().replace(/\/+$/, '');
     cfg.key = (key || '').trim();
     localStorage.setItem(CHAVE_CFG, JSON.stringify(cfg));
+    localStorage.removeItem(CHAVE_OFF);
   }
 
   function limpar() {
     cfg = { url: '', key: '' };
     online = false;
     localStorage.removeItem(CHAVE_CFG);
+    /* marca para nao voltar sozinho na config publicada */
+    localStorage.setItem(CHAVE_OFF, '1');
   }
 
   function ativa() { return !!(cfg.url && cfg.key); }

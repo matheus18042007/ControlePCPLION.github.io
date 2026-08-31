@@ -22,6 +22,9 @@ Almoxarifado PBA/
 ├── .nojekyll                   # necessário no GitHub Pages
 ├── css/styles.css              # tema escuro, botões grandes para uso com luva
 ├── js/app.js                   # banco SQLite, telas, scanner, import/export
+├── js/nuvem.js                 # cliente do Supabase (sincronização)
+├── js/config.js                # URL + chave anon da nuvem (preencher uma vez)
+├── supabase.sql                # script para criar as tabelas na nuvem
 ├── vendor/
 │   ├── sql-wasm.js             # sql.js 1.10.3
 │   ├── sql-wasm.wasm           # SQLite compilado para WebAssembly
@@ -84,10 +87,26 @@ Sem isso, **cada aparelho tem o próprio estoque**. Com isso, todos veem o mesmo
 
 1. Crie a conta em <https://supabase.com> → **New project** (guarde a senha do banco).
 2. No painel: **SQL Editor** → cole TUDO do arquivo `supabase.sql` → **Run**.
-3. No painel: **Settings → API** → copie **Project URL** e a chave **anon public**.
-4. No app (em cada celular): aba **Dados** → *Banco na nuvem* → cole os dois campos → **Conectar**.
+3. Pegue as duas chaves no painel: ⚙️ **Project Settings → API Keys**
+   - **Project URL** → algo como `https://abcdefgh.supabase.co`
+   - chave **anon** / **public** → a chave longa que começa com `eyJ...`
+   - ⚠️ nunca use a **service_role** (é a chave de administrador).
+4. Abra `js/config.js` **no seu PC**, cole os dois valores e publique no GitHub:
+
+   ```js
+   var NUVEM_PADRAO = {
+     url: 'https://abcdefgh.supabase.co',
+     key: 'eyJhbGciOi...'
+   };
+   ```
+
+   Pronto: **todo celular que instalar o app já abre conectado**, ninguém digita nada.
    - No primeiro aparelho, ele pergunta se quer **enviar o catálogo** para a nuvem. Aceite.
    - Nos demais, o estoque desce da nuvem automaticamente.
+   - Se preferir não publicar a chave, deixe `config.js` vazio e configure na mão em cada
+     celular: aba **Dados** → *Banco na nuvem* → cole os dois campos → **Conectar**.
+   - O botão **Desconectar** deixa aquele aparelho só local, e ele *não* volta a se conectar
+     sozinho; para religar, use **Conectar** naquele celular.
 
 Como funciona:
 
