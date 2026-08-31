@@ -7,7 +7,7 @@
    este arquivo nao serve para nada.
 
    Usuarios: Matheus movio, Alan Marques
-   Gerado em: 31/08/2026, 16:24:59
+   Gerado em: 31/08/2026, 16:28:42
    ========================================================= */
 var COFRE = {
   "v": 1,
@@ -29,10 +29,10 @@ var COFRE = {
     {
       "login": "Alan Marques",
       "nome": "Alan Marques",
-      "salt": "zOZEM6lEGF9OUVYRC7eQwQ==",
+      "salt": "jIKRFcWkYhHvoNKcRAxwOg==",
       "env": {
-        "iv": "4OjOADr3tJZbZYBl",
-        "ct": "vOq7Dhao/HTWxIp9IwA+M1r/Y0IDwomVIBSH0dgvI2g+92l/lIa4MVMlXxf74YX9"
+        "iv": "N8LaerAGAK5LoDDv",
+        "ct": "xnF1GcONL/53YjVJlFeCxZmOzGXs2eSO81Z51cukKZsCStShpk52R5aD3QyyWrDH"
       }
     }
   ]
