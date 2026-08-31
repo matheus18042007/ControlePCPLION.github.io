@@ -28,7 +28,7 @@ var COFRE = {
     },
     {
       "login": "Alan Marques",
-      "nome": "Alan Marques",
+      "nome": "alan marques",
       "salt": "jIKRFcWkYhHvoNKcRAxwOg==",
       "env": {
         "iv": "N8LaerAGAK5LoDDv",
