@@ -293,7 +293,9 @@ $('btnTrocarNuvem').addEventListener('click', function () {
 var conteudo = '';
 function gerar() {
   conteudo = Auth.admin.serializar(cofre);
-  $('previa').textContent = conteudo.slice(0, 1200) + (conteudo.length > 1200 ? '\n...' : '');
+  /* mostra o arquivo INTEIRO: cortar aqui fazia quem copiava a mao
+     levar um cofre truncado (a partir do 2o usuario ja passava). */
+  $('previa').textContent = conteudo;
 }
 
 $('btnBaixar').addEventListener('click', function () {

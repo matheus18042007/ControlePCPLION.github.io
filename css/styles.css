@@ -268,7 +268,9 @@ input:focus{border-color:var(--accent)}
 /* ---------- tabbar ---------- */
 .tabbar{
   position:fixed;left:0;right:0;bottom:0;z-index:40;
-  display:grid;grid-template-columns:repeat(4,1fr);
+  /* as colunas seguem a quantidade de abas do modulo (3, 4, ...)
+     em vez de um numero fixo, senao sobra buraco na barra */
+  display:grid;grid-auto-flow:column;grid-auto-columns:1fr;
   background:#121922;border-top:1px solid var(--line);
   padding-bottom:var(--safe-b);
 }
