@@ -363,9 +363,137 @@ var Nuvem = (function () {
     };
   }
 
+  /* =======================================================
+     MODULO EFICIENCIA VG (controle diario de faltas / horas)
+
+     Mesma ideia dos modulos de contagem: tudo mora em
+     eficiencia_colaboradores / eficiencia_dias, separados pela
+     coluna "modulo". Ver supabase_eficiencia.sql.
+  ======================================================= */
+  function eficiencia(modulo) {
+    var m = encodeURIComponent(modulo);
+
+    function puxarColaboradores(aoProgredir) {
+      return puxarPaginado(
+        '/eficiencia_colaboradores?select=*&modulo=eq.' + m + '&order=setor,nome',
+        null, aoProgredir);
+    }
+
+    function puxarDias(aoProgredir) {
+      return puxarPaginado(
+        '/eficiencia_dias?select=*&modulo=eq.' + m + '&order=data.desc',
+        5000, aoProgredir);
+    }
+
+    function puxarTudo(aoProgredir) {
+      var nC = 0, nD = 0;
+      var passo = aoProgredir ? function () { aoProgredir(nC, nD); } : null;
+      return puxarColaboradores(function (n) { nC = n; if (passo) passo(); })
+        .then(function (colaboradores) {
+          return puxarDias(function (n) { nD = n; if (passo) passo(); })
+            .then(function (dias) {
+              return { colaboradores: colaboradores || [], dias: dias || [] };
+            });
+        });
+    }
+
+    /* marca a situacao (I / P / "") e as horas do colaborador
+       na folha em aberto */
+    function marcar(colaboradorId, situacao, hora, usuario) {
+      return req('/rpc/eficiencia_marcar', {
+        method: 'POST',
+        body: {
+          p_modulo: modulo,
+          p_id: colaboradorId,
+          p_situacao: situacao || '',
+          p_hora: Number(hora) || 0,
+          p_usuario: usuario || null,
+          p_aparelho: aparelho()
+        }
+      });
+    }
+
+    function cadastrar(colaboradorId, setor, nome, usuario) {
+      return req('/rpc/eficiencia_cadastrar', {
+        method: 'POST',
+        body: {
+          p_modulo: modulo,
+          p_id: colaboradorId,
+          p_setor: setor,
+          p_nome: nome,
+          p_usuario: usuario || null,
+          p_aparelho: aparelho()
+        }
+      });
+    }
+
+    /* arquiva o dia, limpa a folha e poda o historico -
+       tudo numa transacao so, para todos os aparelhos */
+    function finalizar(data, usuario) {
+      return req('/rpc/eficiencia_finalizar', {
+        method: 'POST',
+        body: {
+          p_modulo: modulo,
+          p_data: data,
+          p_usuario: usuario || null,
+          p_aparelho: aparelho()
+        },
+        timeout: 30000
+      });
+    }
+
+    function excluir(colaboradorId, usuario) {
+      return req('/rpc/eficiencia_excluir', {
+        method: 'POST',
+        body: {
+          p_modulo: modulo,
+          p_id: colaboradorId,
+          p_usuario: usuario || null,
+          p_aparelho: aparelho()
+        },
+        timeout: 30000
+      });
+    }
+
+    /* cadastro em lote (CSV / envio deste aparelho).
+       Quem ja existe la NAO e sobrescrito: a folha do dia que
+       esta na nuvem e a oficial. */
+    function enviarColaboradores(lista) {
+      if (!lista.length) return Promise.resolve([]);
+      var lotes = [], i;
+      var comModulo = lista.map(function (c) {
+        return { modulo: modulo, id: c.id, setor: c.setor, nome: c.nome };
+      });
+      for (i = 0; i < comModulo.length; i += 200) lotes.push(comModulo.slice(i, i + 200));
+
+      return lotes.reduce(function (p, lote) {
+        return p.then(function () {
+          return req('/eficiencia_colaboradores?on_conflict=modulo,id', {
+            method: 'POST',
+            headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+            body: lote,
+            timeout: 30000
+          });
+        });
+      }, Promise.resolve());
+    }
+
+    return {
+      puxarTudo: puxarTudo,
+      puxarColaboradores: puxarColaboradores,
+      puxarDias: puxarDias,
+      marcar: marcar,
+      cadastrar: cadastrar,
+      finalizar: finalizar,
+      excluir: excluir,
+      enviarColaboradores: enviarColaboradores
+    };
+  }
+
   return {
     carregar: carregar,
     contagem: contagem,
+    eficiencia: eficiencia,
     ativa: ativa,
     conectado: conectado,
     config: config,

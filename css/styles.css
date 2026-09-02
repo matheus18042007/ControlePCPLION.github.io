@@ -76,6 +76,13 @@ code{background:#0b0f14;padding:1px 5px;border-radius:5px;font-size:12px;color:v
   display:flex;align-items:center;justify-content:center;
   letter-spacing:.5px;
 }
+/* logo da topbar quando esta mostrando o icone do modulo (mesmo visual do card do hub) */
+.logo.emoji{
+  background:linear-gradient(135deg,rgba(255,138,31,.22),rgba(255,95,31,.10));
+  border:1px solid rgba(255,138,31,.25);
+  color:var(--txt);font-size:20px;font-weight:400;letter-spacing:0;
+  line-height:1;
+}
 .brand-txt{min-width:0;line-height:1.2}
 .brand-txt strong{display:block;font-size:16px}
 .brand-txt small{display:block;color:var(--muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -346,3 +353,56 @@ input:focus{border-color:var(--accent)}
   animation:spin .8s linear infinite;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- módulo Eficiência VG ---------- */
+.sel-setor{
+  flex:1;min-width:0;background:var(--card-2);color:var(--txt);
+  border:1px solid var(--line);border-radius:10px;
+  padding:9px 10px;font-size:14px;
+}
+.efic-dia-topo{
+  display:flex;align-items:baseline;justify-content:space-between;
+  gap:10px;flex-wrap:wrap;margin:12px 0 6px;
+}
+.efic-data{font-size:15px;font-weight:700;color:var(--accent-2)}
+.efic-setor{
+  margin:14px 0 6px;font-size:12.5px;font-weight:700;letter-spacing:.6px;
+  text-transform:uppercase;color:var(--muted);
+}
+/* cabeçalho das colunas, alinhado com .efic-linha */
+.efic-head,.efic-linha{
+  display:grid;grid-template-columns:1fr 116px 74px;
+  gap:8px;align-items:center;
+}
+.efic-head{
+  padding:0 10px 4px;font-size:11px;letter-spacing:.5px;
+  text-transform:uppercase;color:var(--muted);
+}
+.efic-head span:last-child{text-align:right}
+.efic-linha{
+  background:var(--card);border:1px solid var(--line);
+  border-left:3px solid var(--line);
+  border-radius:10px;padding:8px 10px;margin-bottom:6px;
+  transition:border-color .12s ease,opacity .12s ease;
+}
+.efic-linha.integral{border-left-color:var(--ok)}
+.efic-linha.parcial{border-left-color:var(--warn)}
+.efic-linha.falta{border-left-color:var(--danger)}
+/* enquanto grava na nuvem a linha fica apagada, para o dedo
+   não achar que já salvou */
+.efic-linha.gravando{opacity:.5}
+.efic-nome{
+  font-size:14px;font-weight:600;line-height:1.25;
+  overflow:hidden;text-overflow:ellipsis;
+}
+.efic-sit,.efic-hora{
+  background:var(--card-2);color:var(--txt);
+  border:1px solid var(--line);border-radius:9px;
+  padding:8px 8px;font-size:13.5px;width:100%;
+}
+.efic-hora{text-align:right;font-weight:700}
+.efic-linha.falta .efic-sit{color:var(--danger)}
+/* badges do histórico reaproveitam as cores das linhas */
+.badge.integral{background:rgba(40,199,111,.16);color:var(--ok)}
+.badge.parcial{background:rgba(255,183,3,.16);color:var(--warn)}
+.badge.falta{background:rgba(255,77,79,.16);color:var(--danger)}

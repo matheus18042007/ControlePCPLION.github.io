@@ -8,7 +8,7 @@
    Para publicar uma atualização: mudar CACHE_VERSION abaixo.
    ============================================================ */
 
-var CACHE_VERSION = 'pcp-lion-v1.11.1';
+var CACHE_VERSION = 'pcp-lion-v1.13.1';
 
 var ARQUIVOS = [
   './',
@@ -20,14 +20,16 @@ var ARQUIVOS = [
   './js/auth.js',
   './js/nuvem.js',
   './js/contagem.js',
-  './js/contagem.js',
+  './js/eficiencia.js',
   './js/app.js',
   './vendor/sql-wasm.js',
   './vendor/sql-wasm.wasm',
   './vendor/html5-qrcode.min.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/icon-maskable-512.png'
+  './icons/icon-maskable-512.png',
+  './icons/apple-touch-icon.png',
+  './favicon.ico'
 ];
 
 self.addEventListener('install', function (e) {

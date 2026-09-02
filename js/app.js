@@ -5,7 +5,7 @@
 (function () {
 'use strict';
 
-var APP_VERSION = '1.11.1';
+var APP_VERSION = '1.13.1';
 
 /* ---------------------------------------------------------
    Atalhos DOM
@@ -325,6 +325,7 @@ window.PCP = {
   toast: toast, vibrar: vibrar, bip: bip,
   fmtNum: fmtNum, agoraISO: agoraISO, fmtDataHora: fmtDataHora,
   carimbo: carimbo, baixar: baixar, csvDe: csvDe, paraLocal: paraLocal,
+  lerTexto: lerTexto,
   atualizarStatusNuvem: function () { atualizarStatusNuvem(); },
   nuvemStatus: function (t, c) { nuvemStatus(t, c); },
   operador: function () { return operador(); },
@@ -378,8 +379,31 @@ var MODULOS = [
     tabela: 'carenagens',
     tabelaMov: 'movimentacoes_carenagens',
     unidade: 'pç'
+  },
+  {
+    id: 'eficiencia',
+    nome: 'Eficiência VG',
+    desc: 'Controle diário de faltas e horas extras da produção, por setor. Histórico de 10 dias.',
+    icone: '⏱️',
+    titulo: 'Eficiência VG',
+    viewInicial: 'eficiencia-dia',
+    pronto: true,
+    tipo: 'eficiencia'
   }
 ];
+
+/* Cada "tipo" de módulo tem um motor que sabe montar a tela e
+   abrir o banco dele. Módulo sem tipo (Almoxarifado PBA) roda
+   direto no app.js. */
+function motorDoTipo(tipo) {
+  if (tipo === 'contagem') return window.ModuloContagem;
+  if (tipo === 'eficiencia') return window.ModuloEficiencia;
+  return null;
+}
+
+function motoresAtivos() {
+  return [window.ModuloContagem, window.ModuloEficiencia].filter(Boolean);
+}
 
 function moduloPorId(id) {
   for (var i = 0; i < MODULOS.length; i++) if (MODULOS[i].id === id) return MODULOS[i];
@@ -418,9 +442,7 @@ function mostrarHub() {
   estado.modulo = null;
   pararScanner();
   fecharSheets();
-  if (window.ModuloContagem) {
-    qsa('.sheet-wrap.open').forEach(function (s) { s.classList.remove('open'); });
-  }
+  qsa('.sheet-wrap.open').forEach(function (s) { s.classList.remove('open'); });
   $('hub').classList.remove('hidden');
   $('topbar').classList.add('hidden');
   $('main').classList.add('hidden');
@@ -434,10 +456,11 @@ function abrirModulo(id) {
   var m = moduloPorId(id);
   if (!m || !m.pronto) return;
 
-  /* módulos de contagem têm banco próprio e a tela é montada
+  /* módulos externos têm banco próprio e a tela é montada
      na primeira vez que o módulo é aberto */
-  if (m.tipo === 'contagem') {
-    var inst = ModuloContagem.obter(m);
+  var motor = motorDoTipo(m.tipo);
+  if (motor) {
+    var inst = motor.obter(m);
     $('hubSub').textContent = 'Abrindo ' + m.nome + '...';
     inst.preparar().then(function () {
       $('hubSub').textContent = 'Selecione uma função';
@@ -461,6 +484,14 @@ function entrarNoModulo(m) {
   $('main').classList.remove('hidden');
   $('topTitle').textContent = m.titulo;
 
+  /* o quadradinho da topbar vira o mesmo icone do card do hub */
+  var lg = $('topLogo');
+  if (lg) {
+    if (m.icone) { lg.textContent = m.icone; lg.classList.add('emoji'); }
+    else { lg.textContent = 'PBA'; lg.classList.remove('emoji'); }
+    lg.title = m.nome;
+  }
+
   /* só as views e abas do módulo escolhido ficam disponíveis */
   qsa('[data-modulo]').forEach(function (el) {
     el.classList.toggle('hidden', el.dataset.modulo !== id);
@@ -483,7 +514,7 @@ function mostrarView(nome) {
   if (nome === 'hist') renderHistorico();
   if (nome === 'dados') atualizarStats();
   /* deixa os módulos externos atualizarem as telas deles */
-  if (window.ModuloContagem) ModuloContagem.aoMostrarView(nome);
+  motoresAtivos().forEach(function (mo) { mo.aoMostrarView(nome); });
 }
 
 /* ---------------------------------------------------------
@@ -1025,6 +1056,37 @@ function importarCSV(texto) {
 /* ---------------------------------------------------------
    EXPORTAÇÃO
 --------------------------------------------------------- */
+/* Lê um arquivo de texto (CSV) adivinhando a codificação.
+   Excel do Windows salva CSV em ANSI (windows-1252): lido como UTF-8
+   os acentos viram lixo. Tentamos UTF-8 estrito e, se falhar, 1252. */
+/* "JoÃ£o" -> "João": texto UTF-8 que já foi salvo como 1252.
+   É UTF-8 válido, então só dá pra corrigir olhando o padrão. */
+function repararMojibake(s) {
+  if (!/[\u00C3\u00C2][\u0080-\u00BF]/.test(s)) return s;
+  try {
+    var bytes = new Uint8Array(s.length), i;
+    for (i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      if (c > 255) return s;
+      bytes[i] = c;
+    }
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch (e) { return s; }
+}
+function lerTexto(file, cb) {
+  var fr = new FileReader();
+  fr.onload = function () {
+    var buf = new Uint8Array(fr.result), txt;
+    try {
+      txt = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+    } catch (e) {
+      try { txt = new TextDecoder('windows-1252').decode(buf); }
+      catch (e2) { txt = new TextDecoder('utf-8').decode(buf); }
+    }
+    cb(repararMojibake(txt.replace(/^﻿/, '')));
+  };
+  fr.readAsArrayBuffer(file);
+}
 function baixar(blob, nome) {
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
@@ -1248,9 +1310,7 @@ function ligarEventos() {
   $('btnEscolherCsv').addEventListener('click', function () { $('fileCsv').click(); });
   $('fileCsv').addEventListener('change', function (e) {
     var f = e.target.files[0]; if (!f) return;
-    var r = new FileReader();
-    r.onload = function () { importarCSV(String(r.result)); e.target.value = ''; };
-    r.readAsText(f, 'UTF-8');
+    lerTexto(f, function (txt) { importarCSV(txt); e.target.value = ''; });
   });
   $('btnEscolherDb').addEventListener('click', function () { $('fileDb').click(); });
   $('fileDb').addEventListener('change', function (e) {

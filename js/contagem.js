@@ -960,9 +960,7 @@ window.ModuloContagem = (function () {
       $(id + 'FileCsv').addEventListener('change', function (ev) {
         var f = ev.target.files && ev.target.files[0];
         if (!f) return;
-        var fr = new FileReader();
-        fr.onload = function () { importarCsv(String(fr.result)); };
-        fr.readAsText(f, 'utf-8');
+        P.lerTexto(f, function (txt) { importarCsv(txt); });
         ev.target.value = '';
       });
       $(id + 'ExportCsv').addEventListener('click', function () {
