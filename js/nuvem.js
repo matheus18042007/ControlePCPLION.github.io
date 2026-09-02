@@ -232,8 +232,140 @@ var Nuvem = (function () {
     }, Promise.resolve());
   }
 
+  /* =======================================================
+     MODULOS DE CONTAGEM (Quadros VG, Carenagens VG, ...)
+
+     Na nuvem todos moram em contagem_itens / contagem_movimentacoes,
+     separados pela coluna "modulo". Por isso um modulo novo NAO
+     precisa de SQL novo: basta chamar Nuvem.contagem('id_novo').
+     Ver supabase_contagem.sql.
+  ======================================================= */
+  function contagem(modulo) {
+    var m = encodeURIComponent(modulo);
+
+    function puxarItens(aoProgredir) {
+      return puxarPaginado(
+        '/contagem_itens?select=*&modulo=eq.' + m + '&order=codigo', null, aoProgredir);
+    }
+
+    function puxarMovs(limite, aoProgredir) {
+      return puxarPaginado(
+        '/contagem_movimentacoes?select=*&modulo=eq.' + m + '&order=id.desc',
+        limite || 5000, aoProgredir);
+    }
+
+    function puxarTudo(limiteMov, aoProgredir) {
+      var nItens = 0, nMov = 0;
+      var passo = aoProgredir ? function () { aoProgredir(nItens, nMov); } : null;
+      return puxarItens(function (n) { nItens = n; if (passo) passo(); })
+        .then(function (itens) {
+          return puxarMovs(limiteMov, function (n) { nMov = n; if (passo) passo(); })
+            .then(function (movs) {
+              return { itens: itens || [], movimentacoes: movs || [] };
+            });
+        });
+    }
+
+    /* absoluto = true  -> "a quantidade agora e esta"
+       absoluto = false -> "some/subtraia isto" (botoes - e +) */
+    function definir(codigo, qtd, absoluto, usuario, obs) {
+      return req('/rpc/contagem_definir', {
+        method: 'POST',
+        body: {
+          p_modulo: modulo,
+          p_codigo: codigo,
+          p_qtd: qtd,
+          p_absoluto: !!absoluto,
+          p_usuario: usuario || null,
+          p_obs: obs || null,
+          p_aparelho: aparelho()
+        }
+      });
+    }
+
+    function cadastrar(codigo, nome, qtd, usuario) {
+      return req('/rpc/contagem_cadastrar', {
+        method: 'POST',
+        body: {
+          p_modulo: modulo,
+          p_codigo: codigo,
+          p_nome: nome,
+          p_qtd: Number(qtd) || 0,
+          p_usuario: usuario || null,
+          p_aparelho: aparelho()
+        }
+      });
+    }
+
+    function zerar(usuario, obs) {
+      return req('/rpc/contagem_zerar', {
+        method: 'POST',
+        body: {
+          p_modulo: modulo,
+          p_usuario: usuario || null,
+          p_obs: obs || null,
+          p_aparelho: aparelho()
+        },
+        timeout: 30000
+      });
+    }
+
+    function excluir(codigo, usuario) {
+      return req('/rpc/contagem_excluir', {
+        method: 'POST',
+        body: {
+          p_modulo: modulo,
+          p_codigo: codigo,
+          p_usuario: usuario || null,
+          p_aparelho: aparelho()
+        },
+        timeout: 30000
+      }).then(function (r) {
+        return (r && r.codigo) ? r : { codigo: codigo, movimentacoes: 0 };
+      });
+    }
+
+    /* importacao em lote (CSV) e envio dos itens deste aparelho */
+    function enviarItens(lista, atualizarExistentes) {
+      if (!lista.length) return Promise.resolve([]);
+      var lotes = [], i;
+      var comModulo = lista.map(function (it) {
+        return { modulo: modulo, codigo: it.codigo, nome: it.nome, qtd: Number(it.qtd) || 0 };
+      });
+      for (i = 0; i < comModulo.length; i += 200) lotes.push(comModulo.slice(i, i + 200));
+
+      var pref = atualizarExistentes
+        ? 'resolution=merge-duplicates,return=minimal'
+        : 'resolution=ignore-duplicates,return=minimal';
+
+      return lotes.reduce(function (p, lote) {
+        return p.then(function () {
+          return req('/contagem_itens?on_conflict=modulo,codigo', {
+            method: 'POST',
+            headers: { Prefer: pref },
+            body: lote,
+            timeout: 30000
+          });
+        });
+      }, Promise.resolve());
+    }
+
+    return {
+      modulo: modulo,
+      puxarItens: puxarItens,
+      puxarMovs: puxarMovs,
+      puxarTudo: puxarTudo,
+      definir: definir,
+      cadastrar: cadastrar,
+      zerar: zerar,
+      excluir: excluir,
+      enviarItens: enviarItens
+    };
+  }
+
   return {
     carregar: carregar,
+    contagem: contagem,
     ativa: ativa,
     conectado: conectado,
     config: config,

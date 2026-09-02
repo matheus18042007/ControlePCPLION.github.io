@@ -1,5 +1,5 @@
 /* ============================================================
-   Service Worker — Almoxarifado PBA
+   Service Worker — Controle PCP LION
    Estratégia:
      - Navegação (HTML): network-first com fallback para o cache
        (garante pegar a versão nova quando há internet, e abrir
@@ -8,7 +8,7 @@
    Para publicar uma atualização: mudar CACHE_VERSION abaixo.
    ============================================================ */
 
-var CACHE_VERSION = 'almox-pba-v1.8.0';
+var CACHE_VERSION = 'pcp-lion-v1.11.0';
 
 var ARQUIVOS = [
   './',
@@ -19,6 +19,8 @@ var ARQUIVOS = [
   './js/usuarios.js',
   './js/auth.js',
   './js/nuvem.js',
+  './js/contagem.js',
+  './js/contagem.js',
   './js/app.js',
   './vendor/sql-wasm.js',
   './vendor/sql-wasm.wasm',

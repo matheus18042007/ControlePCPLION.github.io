@@ -1,11 +1,11 @@
 /* ============================================================
-   Almoxarifado PBA — PWA de controle de estoque por QR Code
+   Controle PCP LION — PWA multi-funcoes do PCP (almoxarifado PBA e outros modulos)
    Banco: SQLite (sql.js / WebAssembly) persistido em IndexedDB
    ============================================================ */
 (function () {
 'use strict';
 
-var APP_VERSION = '1.8.0';
+var APP_VERSION = '1.11.0';
 
 /* ---------------------------------------------------------
    Atalhos DOM
@@ -192,6 +192,7 @@ function escalar(sql, params) {
 --------------------------------------------------------- */
 function nuvemStatus(txt, cls) {
   var d = $('nuvemDot'); if (d) d.className = 'chip dot ' + cls;
+  var h = $('hubNuvemDot'); if (h) { h.className = 'chip dot ' + cls; h.title = txt; }
   var e = $('nuvemEstado'); if (e) e.textContent = txt;
 }
 
@@ -294,6 +295,7 @@ function upsertLocal(it) {
    Estado da UI
 --------------------------------------------------------- */
 var estado = {
+  modulo: null,
   view: 'estoque',
   itemAtual: null,
   filtroEstoque: 'todos',
@@ -310,6 +312,164 @@ function operador() {
   return Auth.usuario() || localStorage.getItem('operador') || '';
 }
 
+/* ---------------------------------------------------------
+   PONTE PARA OS MÓDULOS EXTERNOS
+
+   O app.js roda dentro de uma IIFE, então os módulos que moram
+   em outros arquivos (ex.: js/contagem.js) recebem por aqui os
+   utilitários compartilhados. Cada módulo tem o SEU banco, mas
+   o visual e os avisos continuam iguais em todo o app.
+--------------------------------------------------------- */
+window.PCP = {
+  $: $, qsa: qsa, esc: esc,
+  toast: toast, vibrar: vibrar, bip: bip,
+  fmtNum: fmtNum, agoraISO: agoraISO, fmtDataHora: fmtDataHora,
+  carimbo: carimbo, baixar: baixar, csvDe: csvDe, paraLocal: paraLocal,
+  atualizarStatusNuvem: function () { atualizarStatusNuvem(); },
+  nuvemStatus: function (t, c) { nuvemStatus(t, c); },
+  operador: function () { return operador(); },
+  mostrarView: function (n) { mostrarView(n); }
+};
+
+/* ---------------------------------------------------------
+   HUB DE FUNÇÕES
+
+   Cada módulo do Controle PCP LION é independente: tem seu
+   próprio título, suas próprias views (marcadas no HTML com
+   data-modulo) e mais para frente suas próprias tabelas.
+   Para adicionar uma função nova:
+     1. criar as <section class="view" data-modulo="xxx"> no
+        index.html e os <button class="tab" data-modulo="xxx">;
+     2. registrar o módulo aqui embaixo em MODULOS;
+     3. (se precisar) criar as tabelas no db.js do módulo.
+--------------------------------------------------------- */
+var MODULOS = [
+  {
+    id: 'almox',
+    nome: 'Almoxarifado PBA',
+    desc: 'Entrada e saída de estoque por QR Code. Itens, movimentações e estoque baixo.',
+    icone: '📦',
+    titulo: 'Almoxarifado',
+    viewInicial: 'estoque',
+    pronto: true
+  },
+  {
+    id: 'quadro',
+    nome: 'Contagem de Quadros VG',
+    desc: 'Contagem cíclica de quadros na produção. Banco próprio: quadros / movimentacoes_quadros.',
+    icone: '🔢',
+    titulo: 'Contagem de Quadros VG',
+    viewInicial: 'quadro-cont',
+    pronto: true,
+    tipo: 'contagem',
+    tabela: 'quadros',
+    tabelaMov: 'movimentacoes_quadros',
+    unidade: 'pç'
+  },
+  {
+    id: 'carenagem',
+    nome: 'Carenagens VG',
+    desc: 'Contagem cíclica de carenagens. Banco próprio: carenagens / movimentacoes_carenagens.',
+    icone: '🛡️',
+    titulo: 'Carenagens VG',
+    viewInicial: 'carenagem-cont',
+    pronto: true,
+    tipo: 'contagem',
+    tabela: 'carenagens',
+    tabelaMov: 'movimentacoes_carenagens',
+    unidade: 'pç'
+  }
+];
+
+function moduloPorId(id) {
+  for (var i = 0; i < MODULOS.length; i++) if (MODULOS[i].id === id) return MODULOS[i];
+  return null;
+}
+
+function renderHub() {
+  var g = $('hubGrid');
+  if (!g) return;
+  g.innerHTML = '';
+  MODULOS.forEach(function (m) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'hub-card' + (m.pronto ? '' : ' breve');
+    b.innerHTML =
+      '<span class="hc-icone">' + m.icone + '</span>' +
+      '<span class="hc-txt">' +
+        '<span class="hc-nome">' + esc(m.nome) + '</span>' +
+        '<span class="hc-desc">' + esc(m.desc) + '</span>' +
+      '</span>' +
+      '<span class="hc-seta">' + (m.pronto ? '›' : 'em breve') + '</span>';
+    b.addEventListener('click', function () {
+      if (!m.pronto) { toast('Função "' + m.nome + '" ainda não disponível', 'err'); return; }
+      abrirModulo(m.id);
+    });
+    g.appendChild(b);
+  });
+
+  var u = $('hubUser');
+  if (u) u.textContent = Auth.atual() ? Auth.usuario() : (operador() || 'operador');
+  var v = $('hubVersao');
+  if (v) v.textContent = APP_VERSION;
+}
+
+function mostrarHub() {
+  estado.modulo = null;
+  pararScanner();
+  fecharSheets();
+  if (window.ModuloContagem) {
+    qsa('.sheet-wrap.open').forEach(function (s) { s.classList.remove('open'); });
+  }
+  $('hub').classList.remove('hidden');
+  $('topbar').classList.add('hidden');
+  $('main').classList.add('hidden');
+  qsa('[data-modulo]').forEach(function (el) { el.classList.add('hidden'); });
+  renderHub();
+  atualizarStatusNuvem();
+  window.scrollTo(0, 0);
+}
+
+function abrirModulo(id) {
+  var m = moduloPorId(id);
+  if (!m || !m.pronto) return;
+
+  /* módulos de contagem têm banco próprio e a tela é montada
+     na primeira vez que o módulo é aberto */
+  if (m.tipo === 'contagem') {
+    var inst = ModuloContagem.obter(m);
+    $('hubSub').textContent = 'Abrindo ' + m.nome + '...';
+    inst.preparar().then(function () {
+      $('hubSub').textContent = 'Selecione uma função';
+      entrarNoModulo(m);
+    }).catch(function (e) {
+      $('hubSub').textContent = 'Selecione uma função';
+      toast('Falha ao abrir o banco de "' + m.nome + '": ' + (e && e.message), 'err');
+    });
+    return;
+  }
+
+  entrarNoModulo(m);
+}
+
+function entrarNoModulo(m) {
+  var id = m.id;
+  estado.modulo = id;
+
+  $('hub').classList.add('hidden');
+  $('topbar').classList.remove('hidden');
+  $('main').classList.remove('hidden');
+  $('topTitle').textContent = m.titulo;
+
+  /* só as views e abas do módulo escolhido ficam disponíveis */
+  qsa('[data-modulo]').forEach(function (el) {
+    el.classList.toggle('hidden', el.dataset.modulo !== id);
+  });
+
+  if (m.viewInicial) mostrarView(m.viewInicial);
+  window.scrollTo(0, 0);
+}
+
 function mostrarView(nome) {
   estado.view = nome;
   qsa('.view').forEach(function (v) { v.classList.remove('active'); });
@@ -322,6 +482,8 @@ function mostrarView(nome) {
   if (nome === 'estoque') renderEstoque();
   if (nome === 'hist') renderHistorico();
   if (nome === 'dados') atualizarStats();
+  /* deixa os módulos externos atualizarem as telas deles */
+  if (window.ModuloContagem) ModuloContagem.aoMostrarView(nome);
 }
 
 /* ---------------------------------------------------------
@@ -941,6 +1103,11 @@ function atualizarStats() {
   $('operadorLabel').textContent = Auth.atual()
     ? ('👤 ' + Auth.usuario())
     : (operador() || 'definir operador');
+
+  var hu = $('hubUser');
+  if (hu) hu.textContent = Auth.atual() ? ('👤 ' + Auth.usuario()) : (operador() || 'operador');
+  var hv = $('hubVersao');
+  if (hv) hv.textContent = APP_VERSION;
 }
 
 /* ---------------------------------------------------------
@@ -949,6 +1116,16 @@ function atualizarStats() {
 function ligarEventos() {
   qsa('.tab').forEach(function (t) {
     t.addEventListener('click', function () { mostrarView(t.dataset.view); });
+  });
+
+  /* voltar do módulo para o hub de funções */
+  $('btnVoltarHub').addEventListener('click', mostrarHub);
+
+  /* conta / trocar operador a partir do hub */
+  $('btnHubConta').addEventListener('click', function () { $('btnOperador').click(); });
+  $('hubNuvemDot').addEventListener('click', function () {
+    if (!Nuvem.ativa()) { toast('Banco da nuvem não vem no cofre deste app', 'err'); return; }
+    sincronizar(false);
   });
 
   $('btnOperador').addEventListener('click', function () {
@@ -1210,6 +1387,7 @@ function registrarSW() {
    LOGIN
 --------------------------------------------------------- */
 function abrirLogin() {
+  $('hub').classList.add('hidden');
   $('login').classList.remove('hidden');
   $('loginUser').focus();
 }
@@ -1228,9 +1406,16 @@ function entrarNoApp() {
   atualizarStats();
   renderEstoque();
   sincronizar(true);
-  // atalho do ícone do app: abrir direto no scanner
+
+  /* depois de logar o app cai no hub de funções */
+  mostrarHub();
+
+  // atalho do ícone do app: abrir direto no scanner do almoxarifado
   try {
-    if (new URLSearchParams(location.search).get('acao') === 'scan') mostrarView('scan');
+    if (new URLSearchParams(location.search).get('acao') === 'scan') {
+      abrirModulo('almox');
+      mostrarView('scan');
+    }
   } catch (e) {}
 }
 

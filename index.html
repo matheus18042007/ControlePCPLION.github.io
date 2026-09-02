@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
-<title>Almoxarifado PBA</title>
-<meta name="description" content="Controle de estoque por QR Code - almoxarifado PBA">
+<title>Controle PCP LION</title>
+<meta name="description" content="Controle PCP LION - central de funcoes do PCP (almoxarifado PBA e outros modulos)">
 <meta name="theme-color" content="#0f1419">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Almox PBA">
+<meta name="apple-mobile-web-app-title" content="PCP LION">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
@@ -17,9 +17,10 @@
 </head>
 <body>
 
-<header class="topbar">
+<header class="topbar hidden" id="topbar">
+  <button id="btnVoltarHub" class="icon-back" type="button" aria-label="Voltar às funções" title="Voltar às funções">&larr;</button>
   <div class="brand">
-    <span class="logo">PBA</span>
+    <span class="logo" id="topLogo">PBA</span>
     <div class="brand-txt">
       <strong id="topTitle">Almoxarifado</strong>
       <small id="topSub">carregando banco...</small>
@@ -31,10 +32,10 @@
   </button>
 </header>
 
-<main id="main">
+<main id="main" class="hidden">
 
   <!-- ================= ESTOQUE ================= -->
-  <section id="view-estoque" class="view active">
+  <section id="view-estoque" class="view active" data-modulo="almox">
     <div class="searchbar">
       <input id="buscaEstoque" type="search" inputmode="search" placeholder="Buscar por código ou nome..." autocomplete="off">
       <button id="btnLimpaBusca" class="icon-btn" type="button" aria-label="Limpar">&times;</button>
@@ -50,7 +51,7 @@
   </section>
 
   <!-- ================= SCANNER ================= -->
-  <section id="view-scan" class="view">
+  <section id="view-scan" class="view" data-modulo="almox">
     <div id="reader" class="reader"></div>
     <div id="scanHint" class="scan-hint">Aponte a câmera para o QR Code do item</div>
     <div class="scan-actions">
@@ -67,7 +68,7 @@
   </section>
 
   <!-- ================= ITEM ================= -->
-  <section id="view-item" class="view">
+  <section id="view-item" class="view" data-modulo="almox">
     <button class="back" id="btnVoltarItem" type="button">&larr; Voltar</button>
     <div class="card item-card">
       <div class="item-code" id="itemCodigo">-</div>
@@ -89,7 +90,7 @@
   </section>
 
   <!-- ================= HISTÓRICO ================= -->
-  <section id="view-hist" class="view">
+  <section id="view-hist" class="view" data-modulo="almox">
     <div class="searchbar">
       <input id="buscaHist" type="search" placeholder="Filtrar por código, nome, obs..." autocomplete="off">
     </div>
@@ -108,7 +109,7 @@
   </section>
 
   <!-- ================= DADOS ================= -->
-  <section id="view-dados" class="view">
+  <section id="view-dados" class="view" data-modulo="almox">
     <div class="card">
       <h3>Importar itens (CSV)</h3>
       <p class="muted small">Colunas aceitas: <code>codigo;nome;descricao;unidade_medida;estoque_atual;estoque_minimo</code>. Separador <code>;</code> ou <code>,</code>.</p>
@@ -168,7 +169,8 @@
   </section>
 </main>
 
-<nav class="tabbar">
+<!-- cada módulo tem sua própria tabbar (data-modulo) -->
+<nav class="tabbar hidden" id="tabbar-almox" data-modulo="almox">
   <button class="tab active" data-view="estoque" type="button"><span>📦</span>Estoque</button>
   <button class="tab" data-view="scan" type="button"><span>⛶</span>Escanear</button>
   <button class="tab" data-view="hist" type="button"><span>🕘</span>Histórico</button>
@@ -239,15 +241,41 @@
   </div>
 </div>
 
+<!-- ================= HUB DE FUNÇÕES ================= -->
+<div id="hub" class="hub hidden">
+  <header class="hub-top">
+    <div class="brand">
+      <span class="logo">PCP</span>
+      <div class="brand-txt">
+        <strong>Controle PCP LION</strong>
+        <small id="hubSub">Selecione uma função</small>
+      </div>
+    </div>
+    <button id="hubNuvemDot" class="chip dot off" type="button" title="Situação da nuvem">●</button>
+    <button id="btnHubConta" class="chip" type="button" title="Conta">
+      <span id="hubUser">operador</span>
+    </button>
+  </header>
+
+  <main class="hub-main">
+    <h2 class="hub-title">Funções</h2>
+    <p class="muted small hub-desc">Escolha o módulo que deseja utilizar.</p>
+    <div id="hubGrid" class="hub-grid"></div>
+    <div class="hub-rodape muted small">
+      Controle PCP LION • versão <span id="hubVersao">-</span>
+    </div>
+  </main>
+</div>
+
 <div id="toast" class="toast"></div>
 <div id="splash" class="splash"><div class="spinner"></div><span>Preparando banco de dados...</span></div>
 
 <!-- ================= LOGIN ================= -->
 <div id="login" class="login hidden">
   <form id="loginForm" class="login-box" autocomplete="on">
-    <span class="logo lg">PBA</span>
-    <h2>Almoxarifado</h2>
-    <p class="muted small" style="margin:0 0 14px">Entre para acessar o estoque</p>
+    <span class="logo lg">PCP</span>
+    <h2>Controle PCP LION</h2>
+    <p class="muted small" style="margin:0 0 14px">Entre para acessar as funções</p>
 
     <label class="lbl" for="loginUser">Usuário</label>
     <input id="loginUser" type="text" autocomplete="username"
@@ -270,6 +298,7 @@
 <script src="./js/usuarios.js"></script>
 <script src="./js/auth.js"></script>
 <script src="./js/nuvem.js"></script>
+<script src="./js/contagem.js"></script>
 <script src="./js/app.js"></script>
 </body>
 </html>

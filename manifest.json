@@ -1,7 +1,7 @@
 {
-  "name": "Almoxarifado PBA - Estoque QR",
-  "short_name": "Almox PBA",
-  "description": "Controle de entrada e saída de estoque por leitura de QR Code, com banco SQLite local e funcionamento offline.",
+  "name": "Controle PCP LION",
+  "short_name": "PCP LION",
+  "description": "Central de funções do PCP: almoxarifado PBA (estoque por QR Code) e demais módulos, com banco SQLite local e funcionamento offline.",
   "id": "almoxarifado-pba",
   "start_url": "./index.html",
   "scope": "./",
@@ -19,7 +19,7 @@
   ],
   "shortcuts": [
     {
-      "name": "Escanear QR Code",
+      "name": "Escanear QR Code (Almoxarifado)",
       "short_name": "Escanear",
       "url": "./index.html?acao=scan",
       "icons": [{ "src": "./icons/icon-192.png", "sizes": "192x192" }]
