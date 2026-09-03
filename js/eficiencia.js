@@ -323,7 +323,10 @@ window.ModuloEficiencia = (function () {
         '  <div class="card">',
         '    <h3>Exportar</h3>',
         '    <p class="muted small">Gera o arquivo para levar ao PC (pasta <em>Downloads</em>).</p>',
-        '    <button id="' + id + 'ExportCsv" class="btn primary block" type="button">⬇ Exportar folha de hoje (.csv)</button>',
+        '    <label class="lbl">Dia do relatório</label>',
+        '    <select id="' + id + 'ExportData" class="sel-setor"></select>',
+        '    <button id="' + id + 'ExportCsv" class="btn primary block" type="button">⬇ Exportar relatório do dia (.csv)</button>',
+        '    <p class="muted small">Sai do histórico: só aparece o dia depois de finalizar a eficiência.</p>',
         '    <button id="' + id + 'ExportCsvHist" class="btn ghost block" type="button">⬇ Exportar histórico (.csv)</button>',
         '    <button id="' + id + 'ExportDb" class="btn ghost block" type="button">⬇ Exportar banco (.db SQLite)</button>',
         '  </div>',
@@ -913,7 +916,45 @@ window.ModuloEficiencia = (function () {
       el.innerHTML = html.join('');
     }
 
+    /* relatorio do dia: colaborador, situacao, horas + contagem por hora.
+       Le sempre do historico (eficiencia_dias), nunca da folha aberta. */
+    function relatorioCsv(data) {
+      var linhas = sel('SELECT setor, nome, situacao, hora FROM eficiencia_dias' +
+                       ' WHERE data = ? ORDER BY ordem, setor, nome', [data]);
+      if (!linhas.length) return '';
+      var contagem = {}, ordem = [];
+      var det = linhas.map(function (r) {
+        var h = num(r.hora);
+        if (h > 0) {
+          var k = P.fmtNum(h);
+          if (contagem[k] === undefined) { contagem[k] = 0; ordem.push([h, k]); }
+          contagem[k]++;
+        }
+        return { setor: r.setor, colaborador: r.nome, situacao: r.situacao || '', horas: h ? P.fmtNum(h) : '' };
+      });
+      ordem.sort(function (a, b) { return a[0] - b[0]; });
+
+      var txt = P.csvDe(['setor', 'colaborador', 'situacao', 'horas'], det);
+      txt += '\r\n\r\nResumo de horas (' + dataBR(data) + ')\r\nhoras;quantidade';
+      ordem.forEach(function (o) { txt += '\r\n' + o[1] + ' horas;' + contagem[o[1]]; });
+      txt += '\r\nTotal de colaboradores;' + det.length;
+      return txt;
+    }
+
+    function preencherDatasExport() {
+      var s = $(id + 'ExportData');
+      if (!s) return;
+      var atual = s.value;
+      var dias = sel('SELECT DISTINCT data FROM eficiencia_dias ORDER BY data DESC')
+        .map(function (r) { return r.data; });
+      s.innerHTML = dias.map(function (d) {
+        return '<option value="' + d + '">' + dataBR(d) + '</option>';
+      }).join('');
+      if (dias.indexOf(atual) >= 0) s.value = atual;
+    }
+
     function renderStats() {
+      preencherDatasExport();
       $(id + 'StatColab').textContent = escalar('SELECT COUNT(*) FROM colaboradores');
       $(id + 'StatHoje').textContent =
         escalar("SELECT COUNT(*) FROM colaboradores WHERE situacao <> '' OR hora > 0");
@@ -999,12 +1040,12 @@ window.ModuloEficiencia = (function () {
       });
 
       $(id + 'ExportCsv').addEventListener('click', function () {
-        var cols = ['setor', 'colaborador', 'situacao', 'hora'];
-        var txt = P.csvDe(cols,
-          sel('SELECT setor, nome AS colaborador, situacao, hora' +
-              ' FROM colaboradores ORDER BY setor, nome'));
+        var data = $(id + 'ExportData').value;
+        if (!data) return toast('Escolha um dia (finalize a eficiência primeiro)', 'err');
+        var txt = relatorioCsv(data);
+        if (!txt) return toast('Nenhum registro nesse dia', 'err');
         P.baixar(new Blob([txt], { type: 'text/csv;charset=utf-8' }),
-          id + '_folha_' + hoje() + '.csv');
+          id + '_relatorio_' + data + '.csv');
         toast('CSV gerado (pasta Downloads)', 'ok');
       });
       $(id + 'ExportCsvHist').addEventListener('click', function () {
