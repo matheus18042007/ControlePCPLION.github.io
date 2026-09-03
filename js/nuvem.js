@@ -375,7 +375,7 @@ var Nuvem = (function () {
 
     function puxarColaboradores(aoProgredir) {
       return puxarPaginado(
-        '/eficiencia_colaboradores?select=*&modulo=eq.' + m + '&order=setor,nome',
+        '/eficiencia_colaboradores?select=*&modulo=eq.' + m + '&order=ordem,setor,nome',
         null, aoProgredir);
     }
 
@@ -413,7 +413,7 @@ var Nuvem = (function () {
       });
     }
 
-    function cadastrar(colaboradorId, setor, nome, usuario) {
+    function cadastrar(colaboradorId, setor, nome, usuario, ordem) {
       return req('/rpc/eficiencia_cadastrar', {
         method: 'POST',
         body: {
@@ -421,6 +421,7 @@ var Nuvem = (function () {
           p_id: colaboradorId,
           p_setor: setor,
           p_nome: nome,
+          p_ordem: Number(ordem) || 0,
           p_usuario: usuario || null,
           p_aparelho: aparelho()
         }
@@ -456,13 +457,16 @@ var Nuvem = (function () {
     }
 
     /* cadastro em lote (CSV / envio deste aparelho).
-       Quem ja existe la NAO e sobrescrito: a folha do dia que
-       esta na nuvem e a oficial. */
+       Setor, nome e ORDEM de quem ja existe sao atualizados -
+       e assim que reimportar a planilha reordena a lista. A
+       marcacao do dia (situacao/hora) nao vai no payload, entao
+       continua intacta: a folha da nuvem e a oficial. */
     function enviarColaboradores(lista) {
       if (!lista.length) return Promise.resolve([]);
       var lotes = [], i;
       var comModulo = lista.map(function (c) {
-        return { modulo: modulo, id: c.id, setor: c.setor, nome: c.nome };
+        return { modulo: modulo, id: c.id, setor: c.setor, nome: c.nome,
+                 ordem: Number(c.ordem) || 0 };
       });
       for (i = 0; i < comModulo.length; i += 200) lotes.push(comModulo.slice(i, i + 200));
 
@@ -470,7 +474,7 @@ var Nuvem = (function () {
         return p.then(function () {
           return req('/eficiencia_colaboradores?on_conflict=modulo,id', {
             method: 'POST',
-            headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+            headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
             body: lote,
             timeout: 30000
           });

@@ -1,0 +1,146 @@
+{
+  "js/app.js": {
+    "mtime": 1788429266.2267458,
+    "seen": 1788429993.1065414,
+    "ast_hash": "73543cead58e1c0061ea46b752c4bce7",
+    "semantic_hash": "73543cead58e1c0061ea46b752c4bce7"
+  },
+  "js/auth.js": {
+    "mtime": 1788195682.293141,
+    "seen": 1788429993.106553,
+    "ast_hash": "06166e0490d6bc589937e314c5e24609",
+    "semantic_hash": "06166e0490d6bc589937e314c5e24609"
+  },
+  "js/contagem.js": {
+    "mtime": 1788374707.4626255,
+    "seen": 1788429993.1065586,
+    "ast_hash": "e26fc13cb31d5ee69f9523ea623dd203",
+    "semantic_hash": "e26fc13cb31d5ee69f9523ea623dd203"
+  },
+  "js/eficiencia.js": {
+    "mtime": 1788429218.9330986,
+    "seen": 1788429993.1065621,
+    "ast_hash": "13aa76ec1a3d299121fe07efeb6f4551",
+    "semantic_hash": "13aa76ec1a3d299121fe07efeb6f4551"
+  },
+  "js/nuvem.js": {
+    "mtime": 1788429218.9340951,
+    "seen": 1788429993.1065657,
+    "ast_hash": "45b2e45660e8f877debf4898060ca7c6",
+    "semantic_hash": "45b2e45660e8f877debf4898060ca7c6"
+  },
+  "js/usuarios.js": {
+    "mtime": 1788367629.4561841,
+    "seen": 1788429993.1065695,
+    "ast_hash": "37263973eec7de9a3b4f6774d6b2cacf",
+    "semantic_hash": "37263973eec7de9a3b4f6774d6b2cacf"
+  },
+  "manifest.json": {
+    "mtime": 1788375006.628472,
+    "seen": 1788429993.1065729,
+    "ast_hash": "8eafd84f0da1f2b5cc847402d1b5d653",
+    "semantic_hash": "8eafd84f0da1f2b5cc847402d1b5d653"
+  },
+  "supabase.sql": {
+    "mtime": 1788201974.9003954,
+    "seen": 1788429993.1065762,
+    "ast_hash": "529ba04687c1a56ed8b817f87b4a775f",
+    "semantic_hash": "529ba04687c1a56ed8b817f87b4a775f"
+  },
+  "supabase_contagem.sql": {
+    "mtime": 1788366903.2490733,
+    "seen": 1788429993.1065795,
+    "ast_hash": "02fe5c23da3d7ab4b723733db547e04c",
+    "semantic_hash": "02fe5c23da3d7ab4b723733db547e04c"
+  },
+  "supabase_eficiencia.sql": {
+    "mtime": 1788373460.5062451,
+    "seen": 1788429993.1065826,
+    "ast_hash": "eac736417633be1fb6401b9c5323ed3d",
+    "semantic_hash": "eac736417633be1fb6401b9c5323ed3d"
+  },
+  "supabase_eficiencia_ordem.sql": {
+    "mtime": 1788429255.9459023,
+    "seen": 1788429993.1065857,
+    "ast_hash": "870674a87bcf4240200f1797b11eec9b",
+    "semantic_hash": "870674a87bcf4240200f1797b11eec9b"
+  },
+  "sw.js": {
+    "mtime": 1788429266.2242453,
+    "seen": 1788429993.106589,
+    "ast_hash": "0f7ea361283d03051e9b973bbe0bae86",
+    "semantic_hash": "0f7ea361283d03051e9b973bbe0bae86"
+  },
+  "tools/gerar_icones.ps1": {
+    "mtime": 1788182618.7218332,
+    "seen": 1788429993.1065927,
+    "ast_hash": "bfff1dba0250fac446e5bd58c90a0945",
+    "semantic_hash": "bfff1dba0250fac446e5bd58c90a0945"
+  },
+  "BD/banco de dados PBA.txt": {
+    "mtime": 1788190827.879624,
+    "seen": 1788429993.106596,
+    "ast_hash": "94f51632cee0de51fc8b909232b4d825",
+    "semantic_hash": "94f51632cee0de51fc8b909232b4d825"
+  },
+  "README.md": {
+    "mtime": 1788202752.3121715,
+    "seen": 1788429993.1065989,
+    "ast_hash": "26ba4ab181182d82949e9b909689ea7c",
+    "semantic_hash": "26ba4ab181182d82949e9b909689ea7c"
+  },
+  "admin.html": {
+    "mtime": 1788374995.3804452,
+    "seen": 1788429993.1066036,
+    "ast_hash": "c5e6784bad14069cec4fbd9559a3f2e8",
+    "semantic_hash": "c5e6784bad14069cec4fbd9559a3f2e8"
+  },
+  "index.html": {
+    "mtime": 1788374989.0576866,
+    "seen": 1788429993.1066072,
+    "ast_hash": "674ae2c37922abcce7ae08ac7332a697",
+    "semantic_hash": "674ae2c37922abcce7ae08ac7332a697"
+  },
+  "icons/_antigo/icon-192.png": {
+    "mtime": 1788182624.9709496,
+    "seen": 1788429993.10661,
+    "ast_hash": "630e3857577af93da19dd3fae9aae8eb",
+    "semantic_hash": "630e3857577af93da19dd3fae9aae8eb"
+  },
+  "icons/_antigo/icon-512.png": {
+    "mtime": 1788182624.9915147,
+    "seen": 1788429993.1066134,
+    "ast_hash": "d8c7a1b65f6ae7dbae3a5a69726ce0be",
+    "semantic_hash": "d8c7a1b65f6ae7dbae3a5a69726ce0be"
+  },
+  "icons/_antigo/icon-maskable-512.png": {
+    "mtime": 1788182624.9999363,
+    "seen": 1788429993.1066167,
+    "ast_hash": "71d9f8b28efae33fa76e054fd03a8dff",
+    "semantic_hash": "71d9f8b28efae33fa76e054fd03a8dff"
+  },
+  "icons/apple-touch-icon.png": {
+    "mtime": 1788374973.1914608,
+    "seen": 1788429993.1066198,
+    "ast_hash": "d936e8b4bd91f6fa30dad4928eea68fe",
+    "semantic_hash": "d936e8b4bd91f6fa30dad4928eea68fe"
+  },
+  "icons/icon-192.png": {
+    "mtime": 1788374973.1487055,
+    "seen": 1788429993.106623,
+    "ast_hash": "6cd1740dfe6621e84aa19838e42d0fef",
+    "semantic_hash": "6cd1740dfe6621e84aa19838e42d0fef"
+  },
+  "icons/icon-512.png": {
+    "mtime": 1788374973.1687634,
+    "seen": 1788429993.106627,
+    "ast_hash": "c2454f0c12f88fae11c583933b4d5b24",
+    "semantic_hash": "c2454f0c12f88fae11c583933b4d5b24"
+  },
+  "icons/icon-maskable-512.png": {
+    "mtime": 1788374973.1878953,
+    "seen": 1788429993.1066303,
+    "ast_hash": "90d31a220c1f456302e2b3ae02e5c34b",
+    "semantic_hash": "90d31a220c1f456302e2b3ae02e5c34b"
+  }
+}

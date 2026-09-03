@@ -165,6 +165,7 @@ window.ModuloEficiencia = (function () {
       '  nome          TEXT NOT NULL,',
       "  situacao      TEXT NOT NULL DEFAULT '',",
       '  hora          REAL NOT NULL DEFAULT 0,',
+      '  ordem         INTEGER NOT NULL DEFAULT 0,',
       '  data_cadastro DATETIME NOT NULL',
       ');',
       'CREATE TABLE IF NOT EXISTS eficiencia_dias (',
@@ -175,11 +176,28 @@ window.ModuloEficiencia = (function () {
       '  hora           REAL NOT NULL DEFAULT 0,',
       '  data           TEXT NOT NULL,',
       '  usuario        TEXT,',
+      '  ordem          INTEGER NOT NULL DEFAULT 0,',
       '  PRIMARY KEY (colaborador_id, data)',
       ');',
       'CREATE INDEX IF NOT EXISTS ix_efic_data ON eficiencia_dias (data DESC);',
       'CREATE INDEX IF NOT EXISTS ix_efic_setor ON colaboradores (setor);'
     ].join('\n');
+
+    /* bancos criados antes da v1.14 nao tinham a coluna "ordem"
+       (a ordem da planilha). Adiciona sem perder nada. */
+    function migrarOrdem() {
+      ['colaboradores', 'eficiencia_dias'].forEach(function (t) {
+        var tem = false;
+        try {
+          var r = db.exec('PRAGMA table_info(' + t + ')');
+          if (r[0]) r[0].values.forEach(function (v) { if (v[1] === 'ordem') tem = true; });
+        } catch (e) { return; }
+        if (!tem) {
+          try { db.run('ALTER TABLE ' + t + ' ADD COLUMN ordem INTEGER NOT NULL DEFAULT 0'); }
+          catch (e2) {}
+        }
+      });
+    }
 
     /* ---------- banco ---------- */
     function abrirBanco() {
@@ -193,6 +211,7 @@ window.ModuloEficiencia = (function () {
               db = new SQL.Database();
             }
             db.run(SCHEMA);
+            migrarOrdem();
           });
         });
     }
@@ -393,15 +412,15 @@ window.ModuloEficiencia = (function () {
         db.run('DELETE FROM eficiencia_dias;');
         (dados.colaboradores || []).forEach(function (c) {
           db.run(
-            'INSERT INTO colaboradores (id,setor,nome,situacao,hora,data_cadastro) VALUES (?,?,?,?,?,?)',
+            'INSERT INTO colaboradores (id,setor,nome,situacao,hora,ordem,data_cadastro) VALUES (?,?,?,?,?,?,?)',
             [c.id, c.setor, c.nome, normSituacao(c.situacao), Number(c.hora) || 0,
-             P.paraLocal(c.data_cadastro)]);
+             Number(c.ordem) || 0, P.paraLocal(c.data_cadastro)]);
         });
         (dados.dias || []).forEach(function (d) {
           db.run(
-            'INSERT INTO eficiencia_dias (colaborador_id,setor,nome,situacao,hora,data,usuario) VALUES (?,?,?,?,?,?,?)',
+            'INSERT INTO eficiencia_dias (colaborador_id,setor,nome,situacao,hora,data,usuario,ordem) VALUES (?,?,?,?,?,?,?,?)',
             [d.colaborador_id, d.setor, d.nome, normSituacao(d.situacao),
-             Number(d.hora) || 0, d.data, d.usuario || null]);
+             Number(d.hora) || 0, d.data, d.usuario || null, Number(d.ordem) || 0]);
         });
         db.run('COMMIT');
       } catch (e) {
@@ -440,7 +459,7 @@ window.ModuloEficiencia = (function () {
     function enviarDaqui() {
       var api = nv();
       if (!api) { toast('Nuvem indisponível: faça login no cofre', 'err'); return; }
-      var lista = sel('SELECT id,setor,nome,situacao,hora FROM colaboradores ORDER BY setor,nome');
+      var lista = sel('SELECT id,setor,nome,situacao,hora,ordem FROM colaboradores ORDER BY ordem,setor,nome');
       if (!lista.length) { toast('Nenhum colaborador para enviar', 'err'); return; }
       if (!confirm('Enviar ' + lista.length + ' colaboradores deste aparelho para a nuvem?\n\n' +
                    'Os que já existirem lá NÃO serão duplicados.')) return;
@@ -525,14 +544,14 @@ window.ModuloEficiencia = (function () {
       var rotulo = btn.textContent;
 
       var localmente = function () {
-        var linhas = sel('SELECT id,setor,nome,situacao,hora FROM colaboradores');
+        var linhas = sel('SELECT id,setor,nome,situacao,hora,ordem FROM colaboradores');
         db.run('BEGIN');
         try {
           db.run('DELETE FROM eficiencia_dias WHERE data = ?', [dia]);
           linhas.forEach(function (c) {
             db.run(
-              'INSERT INTO eficiencia_dias (colaborador_id,setor,nome,situacao,hora,data,usuario) VALUES (?,?,?,?,?,?,?)',
-              [c.id, c.setor, c.nome, c.situacao, c.hora, dia, P.operador() || null]);
+              'INSERT INTO eficiencia_dias (colaborador_id,setor,nome,situacao,hora,data,usuario,ordem) VALUES (?,?,?,?,?,?,?,?)',
+              [c.id, c.setor, c.nome, c.situacao, c.hora, dia, P.operador() || null, c.ordem]);
           });
           db.run("UPDATE colaboradores SET situacao = '', hora = 0");
           /* mantém só os últimos DIAS_HISTORICO dias */
@@ -591,9 +610,10 @@ window.ModuloEficiencia = (function () {
         toast('Esse colaborador já existe nesse setor', 'err'); return;
       }
 
+      var ordem = proximaOrdem();
       var localmente = function () {
-        db.run("INSERT INTO colaboradores (id,setor,nome,situacao,hora,data_cadastro) VALUES (?,?,?,'',0,?)",
-          [cid, setor, nome, P.agoraISO()]);
+        db.run("INSERT INTO colaboradores (id,setor,nome,situacao,hora,ordem,data_cadastro) VALUES (?,?,?,'',0,?,?)",
+          [cid, setor, nome, ordem, P.agoraISO()]);
         salvar(true);
         fecharSheets();
         toast('Colaborador salvo', 'ok');
@@ -607,7 +627,7 @@ window.ModuloEficiencia = (function () {
       var rotulo = btn.textContent;
       btn.disabled = true;
       btn.textContent = 'Gravando na nuvem...';
-      api.cadastrar(cid, setor, nome, P.operador()).then(function () {
+      api.cadastrar(cid, setor, nome, P.operador(), ordem).then(function () {
         localmente();
       }).catch(function (e) {
         statusNuvem();
@@ -616,6 +636,11 @@ window.ModuloEficiencia = (function () {
         btn.disabled = false;
         btn.textContent = rotulo;
       });
+    }
+
+    /* colaborador cadastrado na mao entra no fim da fila */
+    function proximaOrdem() {
+      return (escalar('SELECT MAX(ordem) FROM colaboradores') || 0) + 1;
     }
 
     function excluirColaborador() {
@@ -665,7 +690,8 @@ window.ModuloEficiencia = (function () {
         var cid = chave(setor, nome);
         if (vistos[cid]) { pulados++; return; }
         vistos[cid] = 1;
-        lista.push({ id: cid, setor: setor, nome: nome });
+        /* a posicao da linha no arquivo E a ordem oficial */
+        lista.push({ id: cid, setor: setor, nome: nome, ordem: lista.length + 1 });
       });
       if (!lista.length) {
         $(id + 'CsvResultado').textContent = 'Nenhuma linha válida no arquivo.';
@@ -675,14 +701,21 @@ window.ModuloEficiencia = (function () {
       var localmente = function () {
         var novos = 0, existentes = 0;
         lista.forEach(function (c) {
-          if (um('SELECT id FROM colaboradores WHERE id = ?', [c.id])) { existentes++; return; }
-          db.run("INSERT INTO colaboradores (id,setor,nome,situacao,hora,data_cadastro) VALUES (?,?,?,'',0,?)",
-            [c.id, c.setor, c.nome, P.agoraISO()]);
+          if (um('SELECT id FROM colaboradores WHERE id = ?', [c.id])) {
+            /* ja existe: so acerta setor/nome e a ORDEM da planilha.
+               A marcacao do dia (situacao/hora) nao e tocada. */
+            db.run('UPDATE colaboradores SET setor = ?, nome = ?, ordem = ? WHERE id = ?',
+              [c.setor, c.nome, c.ordem, c.id]);
+            existentes++;
+            return;
+          }
+          db.run("INSERT INTO colaboradores (id,setor,nome,situacao,hora,ordem,data_cadastro) VALUES (?,?,?,'',0,?,?)",
+            [c.id, c.setor, c.nome, c.ordem, P.agoraISO()]);
           novos++;
         });
         salvar(true);
         $(id + 'CsvResultado').textContent =
-          novos + ' novo(s), ' + existentes + ' já existia(m)' +
+          novos + ' novo(s), ' + existentes + ' já existia(m) (ordem atualizada)' +
           (pulados ? ', ' + pulados + ' linha(s) ignorada(s)' : '') + '.';
         toast('Importação concluída', 'ok');
         render();
@@ -708,8 +741,11 @@ window.ModuloEficiencia = (function () {
     /* =======================================================
        RENDERIZAÇÃO
     ======================================================= */
+    /* a ordem dos setores e a ordem em que eles aparecem na
+       planilha: manda o menor "ordem" dos colaboradores dele */
     function setores() {
-      return sel('SELECT DISTINCT setor FROM colaboradores ORDER BY setor')
+      return sel('SELECT setor, MIN(ordem) AS mo FROM colaboradores ' +
+                 'GROUP BY setor ORDER BY mo, setor')
         .map(function (r) { return r.setor; });
     }
 
@@ -735,15 +771,19 @@ window.ModuloEficiencia = (function () {
     }
 
     function linhasDoDia() {
-      var sql = 'SELECT * FROM colaboradores';
+      /* ordem = a da planilha importada: setores na ordem em que
+         apareceram e, dentro do setor, linha por linha */
+      var sql = 'SELECT c.* FROM colaboradores c ' +
+                'JOIN (SELECT setor, MIN(ordem) AS mo FROM colaboradores GROUP BY setor) s ' +
+                '  ON s.setor = c.setor';
       var cond = [], par = [];
-      if (estado.setor !== 'TODOS') { cond.push('setor = ?'); par.push(estado.setor); }
+      if (estado.setor !== 'TODOS') { cond.push('c.setor = ?'); par.push(estado.setor); }
       if (estado.busca) {
-        cond.push('(LOWER(nome) LIKE ? OR LOWER(setor) LIKE ?)');
+        cond.push('(LOWER(c.nome) LIKE ? OR LOWER(c.setor) LIKE ?)');
         par.push('%' + estado.busca + '%', '%' + estado.busca + '%');
       }
       if (cond.length) sql += ' WHERE ' + cond.join(' AND ');
-      sql += ' ORDER BY setor, nome';
+      sql += ' ORDER BY s.mo, c.setor, c.ordem, c.nome';
       return sel(sql, par);
     }
 
@@ -839,7 +879,7 @@ window.ModuloEficiencia = (function () {
         par.push('%' + termo + '%', '%' + termo + '%');
       }
       if (cond.length) sql += ' WHERE ' + cond.join(' AND ');
-      sql += ' ORDER BY data DESC, setor, nome LIMIT 800';
+      sql += ' ORDER BY data DESC, ordem, setor, nome LIMIT 800';
 
       var linhas = sel(sql, par);
       var el = $(id + 'ListaHist');

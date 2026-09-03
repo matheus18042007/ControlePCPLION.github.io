@@ -1,313 +1,156 @@
-# Almoxarifado PBA — PWA de estoque por QR Code
+# Controle PCP LION
 
-Aplicativo web instalável (PWA) para uso operacional dentro do almoxarifado:
-escaneia o QR Code do item, escolhe **Entrada** ou **Saída**, informa a quantidade
-e o saldo é atualizado automaticamente.
+PWA (app instalável) de controle de chão de fábrica. Roda 100% no navegador —
+HTML + CSS + JavaScript puro, sem framework, sem build. Funciona offline e
+sincroniza com o Supabase quando tem internet.
 
-- 100% HTML + CSS + JavaScript puro (sem framework, sem build).
-- Banco **SQLite** rodando no próprio navegador (`sql.js` / WebAssembly), persistido em **IndexedDB**.
-- Funciona **offline** (Service Worker) — importante onde não há sinal.
-- Leitura de QR Code pela câmera do celular (`html5-qrcode` + `getUserMedia`), sem app externo.
-- Exporta o arquivo `.db` (SQLite) para sincronizar com o app do PC.
+Versão atual: **1.14.0** (`APP_VERSION` em `js/app.js`, `CACHE_VERSION` em `sw.js`).
 
 ---
 
-## 1. Estrutura de arquivos
+## Hub de funções
+
+A tela inicial é um hub com os módulos. Cada módulo é **independente**: tem suas
+próprias telas, sua própria tabbar e seu **próprio banco local** — um não derruba
+o outro.
+
+| Módulo | Id | O que faz | Banco local | Tabelas no Supabase |
+|---|---|---|---|---|
+| 📦 Almoxarifado PBA | `almox` | Entrada/saída de estoque por QR Code, itens, movimentações, estoque baixo | `pcp_almox` | `itens`, `movimentacoes`, `exclusoes` |
+| 🔢 Contagem de Quadros VG | `quadro` | Contagem cíclica de quadros na produção | `pcp_quadro` | `contagem_itens`, `contagem_movimentacoes` (modulo=`quadro`) |
+| 🛡️ Carenagens VG | `carenagem` | Contagem cíclica de carenagens | `pcp_carenagem` | idem, modulo=`carenagem` |
+| ⏱️ Eficiência VG | `eficiencia` | Faltas e horas extras do dia, por setor. Histórico de 10 dias | `pcp_eficiencia` | `eficiencia_colaboradores`, `eficiencia_dias` |
+
+### Como adicionar um módulo novo
+
+1. criar as `<section class="view" data-modulo="xxx">` no `index.html` e os
+   `<button class="tab" data-modulo="xxx">`;
+2. registrar o módulo em `MODULOS` (`js/app.js`, ~L347);
+3. se for do tipo `contagem`, **nada mais precisa ser escrito** — o motor
+   genérico `js/contagem.js` monta tela e banco a partir do `cfg`.
+
+---
+
+## Arquivos
 
 ```
-Almoxarifado PBA/
-├── index.html                  # interface (todas as telas)
-├── manifest.json               # metadados do PWA (nome, ícones, standalone)
-├── sw.js                       # Service Worker (cache offline + atualização)
-├── .nojekyll                   # necessário no GitHub Pages
-├── css/styles.css              # tema escuro, botões grandes para uso com luva
-├── js/app.js                   # banco SQLite, telas, scanner, import/export
-├── js/nuvem.js                 # cliente do Supabase (sincronização)
-├── js/auth.js                  # login, senhas e criptografia do cofre
-├── js/usuarios.js              # COFRE: usuários + URL/chave cifrados (gerado)
-├── admin.html                  # painel que gera o js/usuarios.js
-├── supabase.sql                # script para criar as tabelas na nuvem
-├── vendor/
-│   ├── sql-wasm.js             # sql.js 1.10.3
-│   ├── sql-wasm.wasm           # SQLite compilado para WebAssembly
-│   └── html5-qrcode.min.js     # leitor de QR Code 2.3.8
-├── icons/                      # ícones 192 / 512 / maskable
-├── tools/gerar_icones.ps1      # regera os ícones (PowerShell)
-└── exemplo_itens.csv           # modelo de importação
+index.html          Shell do app: hub, views e tabbars de todos os módulos
+admin.html          Gerador do cofre (js/usuarios.js) — uso do administrador
+css/styles.css      Estilo único (claro/escuro)
+sw.js               Service Worker — cache offline (ARQUIVOS + CACHE_VERSION)
+manifest.json       PWA: ícones, nome, cor
+
+js/app.js           Núcleo: banco SQLite, hub, telas do Almoxarifado,
+                    scanner QR, import/export CSV e .db
+js/contagem.js      Motor genérico dos módulos de contagem (quadro, carenagem)
+js/eficiencia.js    Módulo Eficiência VG (folha do dia + histórico)
+js/nuvem.js         Camada Supabase (REST/PostgREST) para os 3 tipos de módulo
+js/auth.js          Login e cofre AES-GCM da config da nuvem
+js/usuarios.js      Cofre cifrado — GERADO por admin.html, não editar à mão
+
+vendor/             sql-wasm (SQLite), html5-qrcode
+tools/gerar_icones.ps1   Gera os ícones a partir da logo
+exemplo_itens.csv   Modelo de importação do Almoxarifado
 ```
 
-As bibliotecas estão **hospedadas junto com o app** (pasta `vendor/`), e não em CDN —
-assim o app abre offline de verdade, sem depender da internet.
+### SQL (rodar no SQL Editor do Supabase, nesta ordem)
+
+```
+supabase.sql                  Almoxarifado
+supabase_contagem.sql         Quadros + Carenagens
+supabase_eficiencia.sql       Eficiência VG
+supabase_eficiencia_ordem.sql Eficiência VG — coluna "ordem"  (rodar por último)
+```
+
+Todos são idempotentes: podem ser rodados de novo sem apagar dados.
 
 ---
 
-## 2. Publicar no GitHub Pages
+## Eficiência VG
 
-1. Crie um repositório no GitHub (ex.: `almoxarifado-pba`).
-2. Envie **todo o conteúdo desta pasta** para a raiz do repositório
-   (o `index.html` precisa ficar na raiz).
+Folha **do dia**: você marca a situação de cada colaborador, clica em
+**Finalizar eficiência** e o dia inteiro vai para o histórico carimbado com a
+data, deixando a folha limpa para o dia seguinte.
 
-   Pelo terminal, dentro desta pasta:
+Situação guarda só o código:
 
-   ```bash
-   git init
-   git add .
-   git commit -m "PWA almoxarifado PBA"
-   git branch -M main
-   git remote add origin https://github.com/SEU_USUARIO/almoxarifado-pba.git
-   git push -u origin main
-   ```
-
-3. No GitHub: **Settings → Pages → Build and deployment**
-   - Source: `Deploy from a branch`
-   - Branch: `main` / `/ (root)` → **Save**
-4. Em 1–2 minutos o site fica disponível em:
-   `https://SEU_USUARIO.github.io/almoxarifado-pba/`
-   (HTTPS automático — requisito para o navegador liberar a câmera).
-
-> Se o repositório for **privado**, o GitHub Pages exige plano pago. Para uso interno
-> comum, deixe o repositório público (os dados de estoque **não** ficam no GitHub, só o app).
-
----
-
-## 3. Instalar no celular (Samsung S25 / Chrome)
-
-1. Abra o link do GitHub Pages no **Chrome**.
-2. Menu (⋮) → **Adicionar à tela inicial** / **Instalar aplicativo**.
-   (Ou toque no botão **📲 Instalar na tela inicial** na aba *Dados*.)
-3. O app passa a abrir em tela cheia, com ícone próprio, sem barra do navegador.
-4. Na primeira leitura, o Chrome pede permissão de **câmera** → *Permitir*.
-
-Atualizações: basta publicar no GitHub. O Service Worker detecta a nova versão e
-recarrega sozinho; também há o botão **🔄 Procurar atualização** na aba *Dados*.
-
----
-
-## 3.1 Estoque compartilhado entre celulares (Supabase — grátis)
-
-Sem isso, **cada aparelho tem o próprio estoque**. Com isso, todos veem o mesmo saldo.
-
-1. Crie a conta em <https://supabase.com> → **New project** (guarde a senha do banco).
-2. No painel: **SQL Editor** → cole TUDO do arquivo `supabase.sql` → **Run**.
-3. Pegue as duas chaves no painel: ⚙️ **Project Settings → API Keys**
-   - **Project URL** → algo como `https://abcdefgh.supabase.co`
-   - chave **anon** / **public** → a chave longa que começa com `eyJ...`
-   - ⚠️ nunca use a **service_role** (é a chave de administrador).
-4. Leve os dois valores para o **cofre** (`admin.html`) — veja a seção **3.2**.
-   A URL e a chave ficam **cifradas** dentro de `js/usuarios.js`, e só são abertas
-   depois que o operador faz login. Nada de chave em texto puro no GitHub.
-
-   Pronto: **todo celular que instalar o app já abre conectado**, ninguém digita nada
-   além do próprio login.
-   - No primeiro aparelho, ele pergunta se quer **enviar o catálogo** para a nuvem. Aceite.
-   - Nos demais, o estoque desce da nuvem automaticamente.
-   - Se preferir não usar o cofre, deixe `js/usuarios.js` vazio: o app abre **sem login**
-     e a nuvem é configurada na mão em cada celular (aba **Dados** → *Banco na nuvem* →
-     cole os dois campos → **Conectar**).
-   - O botão **Desconectar** deixa aquele aparelho só local, e ele *não* volta a se conectar
-     sozinho; para religar, use **Conectar** naquele celular.
-
-   **Tamanho da base:** o Supabase corta toda resposta em 1000 linhas, então o app baixa
-   em páginas até acabar — o catálogo desce inteiro, com 500 ou 50.000 itens (durante a
-   descida o status mostra o andamento). Do histórico ele traz as **5.000 movimentações
-   mais recentes**; as antigas continuam guardadas na nuvem e aparecem no painel do
-   Supabase.
-
-Como funciona:
-
-- Toda entrada/saída vai **direto ao servidor**, dentro de uma transação que trava a linha
-  do item (`select ... for update`). Dois celulares dando baixa no mesmo instante **não**
-  se sobrescrevem — as quantidades se somam corretamente.
-- Ao abrir um item, o app **confere o saldo oficial** na nuvem antes de deixar movimentar.
-- O SQLite local vira só **cache de leitura** (abre rápido e permite consultar sem sinal).
-- **Sem sinal, a baixa não é gravada** e o app avisa `NÃO gravado` — nada de saldo fantasma.
-  O ponto verde/vermelho no topo mostra a situação da conexão; toque nele para sincronizar.
-- A nuvem **nunca apaga** os itens do aparelho: se ela estiver vazia, o app pede que você
-  envie os dados primeiro.
-
-O histórico na nuvem é *append-only* (a política de segurança não permite apagar nem editar
-movimentação pelo celular) — some só pelo painel do Supabase.
-
----
-
-## 3.2 Login dos operadores e cofre da chave (`admin.html`)
-
-O app pode exigir **login** e guardar a URL/chave do Supabase **criptografadas**.
-Tudo isso mora em um único arquivo gerado: `js/usuarios.js` (o *cofre*).
-
-Como o cofre funciona:
-
-- A URL e a chave são cifradas com **AES-GCM 256** por uma *chave-mestra* aleatória.
-- Para cada usuário, essa chave-mestra é embrulhada na **senha dele**, derivada com
-  **PBKDF2-SHA256, 310.000 rodadas**, com *salt* próprio.
-- **Nenhuma senha é guardada** — nem em texto, nem em hash reversível. Sem uma senha
-  válida, o arquivo publicado não serve para nada: não dá para ler a chave do Supabase.
-- Cada usuário tem a **sua** senha e todos abrem a mesma chave-mestra.
-
-### Criar o cofre (primeira vez)
-
-1. Abra **`admin.html`** no seu PC (basta dar duplo clique, ou usar o servidor local da
-   seção 8). **Não precisa de internet** e ele **nunca** deve ser aberto pelos operadores.
-2. Cole a **URL do projeto** e a **chave anon** do Supabase.
-3. Informe **seu login, seu nome e sua senha** (mínimo 6 caracteres) → **Criar cofre**.
-4. Em *Passo final*, clique **Baixar usuarios.js** e substitua o arquivo `js/usuarios.js`
-   do projeto. Publique no GitHub.
-5. Suba a `CACHE_VERSION` em `sw.js` (senão o celular continua com o cofre antigo em cache).
-
-### Adicionar, trocar senha ou remover operador
-
-1. Abra `admin.html`, cole a URL/chave outra vez **ou** carregue o cofre atual: o painel
-   pede o **seu login e senha** para destravar.
-2. Em *Usuários*: digite login + nome + senha → **Salvar usuário**.
-   - Se o login já existir, a senha é **substituída** (é assim que se reseta uma senha).
-   - **Remover** tira o acesso daquela pessoa.
-3. **Baixar usuarios.js** → substitua o arquivo → publique → suba a `CACHE_VERSION`.
-
-> Trocar a chave do Supabase depois? Use *Banco na nuvem* → **Atualizar dados da nuvem**
-> dentro do `admin.html`: o cofre é re-cifrado sem que ninguém precise trocar de senha.
-
-### No celular
-
-- Ao abrir o app aparece a tela de **Entrar** (login + senha).
-- **Manter conectado neste aparelho** deixa a sessão salva até alguém clicar em **Sair**
-  (aba *Dados*). Sem marcar, a sessão cai ao fechar o app.
-- O nome de quem está logado vai gravado em **toda movimentação** (coluna *usuário* do
-  histórico e da nuvem) — não é mais preciso "definir operador" na mão.
-- Senha esquecida? Não há recuperação (é esse o ponto): gere um cofre novo com uma
-  senha nova para aquele login, como descrito acima.
-
----
-
-## 4. Como usar
-
-| Aba | Função |
+| Código | Significado |
 |---|---|
-| **📦 Estoque** | Lista pesquisável por código/nome, filtros *Estoque baixo* e *Zerados*. Toque no item para abrir. |
-| **⛶ Escanear** | Liga a câmera e lê o QR Code. Também aceita digitar o código manualmente. |
-| **🕘 Histórico** | Todas as movimentações, com filtro por tipo (entrada/saída), período e texto. |
-| **⚙ Dados** | Importar CSV, cadastro manual, **excluir item**, exportar `.db`/`.csv`, importar `.db`, apagar dados. |
+| `I` | Dia todo |
+| `P` | Parcial |
+| `` (vazio) | Falta |
 
-**Fluxo operacional:**
+Histórico mantido por **10 dias** (`DIAS_HISTORICO`).
 
-```
-Escanear QR  →  Tela do item (nome + saldo)  →  [➕ Entrada] ou [➖ Saída]
-             →  quantidade + observação      →  Confirmar
-             →  saldo atualizado + registro no histórico
-```
+### Ordem da planilha
 
-- Saída maior que o saldo disponível **pede confirmação** antes de deixar negativo.
-- Toque no botão do topo direito para definir o **nome do operador** — ele é gravado
-  em cada movimentação.
-- Cada confirmação grava no banco e persiste imediatamente no aparelho.
+Os colaboradores aparecem **na ordem da planilha CSV importada**, não em ordem
+alfabética. A coluna `ordem` (integer) existe em `eficiencia_colaboradores` e em
+`eficiencia_dias`; os setores também são ordenados pelo menor `ordem` dos seus
+colaboradores. Reimportar a planilha reordena sem perder marcações.
 
-### Excluir um item por completo (aba *Dados*)
+Isso é o que o `supabase_eficiencia_ordem.sql` instala:
 
-O card **Excluir item** apaga o código **do banco na nuvem**: some o item e todo o
-histórico dele, numa única transação (função `excluir_item`). Não tem como desfazer —
-exporte o backup antes.
+- `alter table` adicionando `ordem` nas duas tabelas + índice;
+- `drop function` da versão antiga de `eficiencia_cadastrar` (6 argumentos) e
+  recriação com 7 (o `p_ordem`) — senão o Postgres fica com as duas e não sabe
+  qual chamar;
+- `eficiencia_finalizar` levando a `ordem` junto para o histórico;
+- views `eficiencia_vg` e `eficiencia_vg_historico` (`drop view ... cascade`
+  antes de criar: não dá para trocar a lista de colunas de uma view existente);
+- `notify pgrst, 'reload schema'` no fim.
 
-- Digite o código e confirme duas vezes (a segunda mostra quantas movimentações vão embora).
-- **Com nuvem ligada:** só apaga aqui depois que o servidor confirmar. Se a nuvem não
-  responder, **nada é apagado** — nem no celular. Assim dois aparelhos não ficam divergentes.
-- **Sem nuvem** (app local): apaga só neste aparelho.
-- Fica um rastro na tabela `exclusoes` do Supabase (código, nome, saldo final, quantas
-  movimentações, quem excluiu e de qual aparelho) — as políticas de RLS continuam sem
-  permitir `DELETE` solto pelo app.
+**Se der "Could not find the 'ordem' column ... in the schema cache":** o SQL não
+rodou, ou o PostgREST está com cache velho. Rode o arquivo inteiro e, se ainda
+falhar, Settings → API → *Reload schema cache*.
 
-### QR Codes aceitos
-
-O conteúdo do QR é tratado como o **código do item**. O app também entende automaticamente:
-
-- texto puro: `ACAD-000001`
-- JSON: `{"codigo":"ACAD-000001"}` (também aceita `payload`, `serial`, `code`, `id`)
-- URL: `https://.../item?codigo=ACAD-000001` ou `https://.../ACAD-000001`
-
-Se o código não existir no cadastro, o app avisa e oferece **cadastro rápido**.
+O CSV precisa das colunas **setor** e **colaborador** (separador `;` ou `,`).
+Exportação: folha de hoje e histórico, ambos em `.csv`.
 
 ---
 
-## 5. Importação de itens (CSV)
+## Nuvem (Supabase)
 
-Modelo em `exemplo_itens.csv`. Cabeçalho aceito (separador `;` ou `,`):
+Sincronia por REST (PostgREST), com paginação. Toda escrita passa por função
+`security definer` no banco — o app nunca faz `insert` direto:
 
-```
-codigo;nome;descricao;unidade_medida;estoque_atual;estoque_minimo
-```
+- Almoxarifado: `registrar_movimentacao`, `cadastrar_item`, `excluir_item`
+- Contagem: `contagem_definir`, `contagem_cadastrar`, `contagem_zerar`, `contagem_excluir`
+- Eficiência: `eficiencia_marcar`, `eficiencia_cadastrar`, `eficiencia_finalizar`, `eficiencia_excluir`
 
-Sinônimos reconhecidos: `cod/sku/payload/serial` (código), `unidade/un/um`,
-`estoque/saldo/quantidade/qtd` (saldo), `minimo/min`.
-
-- Item **novo** → é criado com o saldo do arquivo.
-- Item **já existente** → nome/descrição/unidade/mínimo são atualizados.
-  O saldo só é sobrescrito se a opção *“Atualizar saldo dos itens já existentes”* estiver marcada
-  (evita apagar movimentações feitas no chão de fábrica).
+RLS está ligado em todas as tabelas. Cada aparelho tem um id próprio, gravado
+junto com o usuário em toda movimentação.
 
 ---
 
-## 6. Sincronizar com o app do PC
+## Login e o cofre
 
-Aba **Dados → ⬇ Exportar banco (.db SQLite)**: gera `almoxarifado_AAAAMMDD_HHMM.db`
-na pasta *Downloads* do celular. Leve para o PC por cabo USB, nuvem ou e-mail.
+- Existe uma **chave-mestra aleatória (M)**, gerada uma única vez.
+- A URL e a chave anon do Supabase ficam **cifradas com M** (AES-GCM).
+- M não é guardada em texto puro: para cada usuário guardamos M cifrada com a
+  **senha dele** (PBKDF2-SHA256, 310.000 rodadas).
 
-O arquivo é um SQLite padrão com o schema:
+Resultado: `js/usuarios.js` publicado no GitHub é só ruído. Trocar a senha de um
+usuário não mexe nos outros.
 
-```sql
-CREATE TABLE itens (
-  codigo         TEXT PRIMARY KEY,
-  nome           TEXT NOT NULL,
-  descricao      TEXT,
-  unidade_medida TEXT DEFAULT 'UN',
-  estoque_atual  REAL NOT NULL DEFAULT 0,
-  estoque_minimo REAL DEFAULT 0,
-  data_cadastro  DATETIME
-);
+**Limite honesto:** quem tem uma senha válida consegue, com esforço, extrair a
+chave anon — o navegador precisa dela em claro para falar com o Supabase. A
+defesa real do banco continua sendo o **RLS**.
 
-CREATE TABLE movimentacoes (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  codigo_item  TEXT NOT NULL REFERENCES itens(codigo),
-  tipo         TEXT NOT NULL,          -- 'ENTRADA' | 'SAIDA'
-  quantidade   REAL NOT NULL,
-  data_hora    DATETIME NOT NULL,
-  usuario      TEXT,
-  observacao   TEXT
-);
-```
-
-Também é possível exportar `itens.csv` e `movimentacoes.csv` para abrir no Excel.
-
-O caminho inverso (**Importar banco .db**) substitui os dados do celular pelo arquivo
-enviado do PC — útil para distribuir o cadastro atualizado.
+Para criar/remover usuários ou trocar a chave do Supabase: abra `admin.html`,
+gere o novo `js/usuarios.js` e publique.
 
 ---
 
-## 7. Onde ficam os dados
+## Publicar uma atualização
 
-No próprio aparelho, em `IndexedDB → almox_pba → kv → dbfile` (o arquivo SQLite em bytes).
-Nada é enviado para servidor algum.
+1. mudar `APP_VERSION` em `js/app.js`;
+2. mudar `CACHE_VERSION` em `sw.js` (mesmo número, ex. `pcp-lion-v1.14.0`);
+3. se criou arquivo novo, adicionar em `ARQUIVOS` no `sw.js`;
+4. commit + push (GitHub Pages).
 
-⚠️ Consequências: limpar os dados do navegador/app apaga o estoque, e cada celular tem
-seu próprio banco. **Exporte o `.db` periodicamente** como backup.
+Sem trocar o `CACHE_VERSION` os celulares continuam com a versão antiga em cache.
 
----
-
-## 8. Testar no PC antes de publicar
-
-Não abra por `file://` (Service Worker e WASM exigem servidor). Use:
-
-```bash
-python -m http.server 8080
-```
-
-e acesse `http://localhost:8080` (localhost é tratado como seguro, a câmera funciona).
-
----
-
-## 9. Manutenção
-
-- **Publicou mudanças e o celular não atualizou?** Suba a versão em `sw.js`
-  (`CACHE_VERSION = 'almox-pba-v1.5.0'`) e em `APP_VERSION` no `js/app.js`.
-- **Trocou o `js/usuarios.js` (cofre)?** Suba a `CACHE_VERSION` também — senão o celular
-  segue usando o cofre velho que está no cache.
-- **Trocar o ícone:** edite/rode `tools/gerar_icones.ps1`.
-- **Atualizar bibliotecas:** substitua os arquivos em `vendor/`
-  (sql.js e html5-qrcode) e suba a `CACHE_VERSION`.
+Teste local: `python -m http.server 8080` e abrir `http://localhost:8080`
+(precisa ser servido por HTTP — a câmera e o Service Worker não funcionam em
+`file://`).
