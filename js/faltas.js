@@ -697,10 +697,18 @@ window.ModuloFaltas = (function () {
       $(id + 'Notificar').addEventListener('click', function () {
         if (!window.Nuvem || !Nuvem.push) return;
         toast('Enviando notificação...');
-        Nuvem.push.notificar(id, true).then(function (r) {
-          toast(r && r.enviadas ? 'Notificação enviada (' + r.enviadas + ').'
-                                  : 'Ninguém inscrito para receber.');
-        })['catch'](function () { toast('Falha ao notificar.', 'err'); });
+        sincronizar(true).then(function () {
+          return Nuvem.push.notificar(id, true);
+        }).then(function (r) {
+          r = r || {};
+          if (r.enviadas) { toast('Notificação enviada (' + r.enviadas + ').', 'ok'); return; }
+          /* diz o motivo real em vez de chutar */
+          if (r.erro) toast('Erro: ' + r.erro, 'err');
+          else if (!r.versao) toast('Função antiga na nuvem: refaça o deploy de faltas-notificar.', 'err');
+          else if (r.inscritos === 0) toast('Nenhum aparelho inscrito. Ative as notificações.', 'err');
+          else if (r.inscritos === undefined) toast('Nenhuma falta em aberto na nuvem.', 'err');
+          else toast('Falhou o envio (' + (r.removidas || 0) + ' inscrições mortas).', 'err');
+        })['catch'](function (e) { toast('Falha ao notificar: ' + e.message, 'err'); });
       });
 
       $(id + 'Sync').addEventListener('click', function () { sincronizar(false); });

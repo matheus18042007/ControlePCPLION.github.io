@@ -40,7 +40,11 @@ const cors = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+/* carimbo em toda resposta: o app usa para saber se o deploy e o atual */
+const FN_VERSION = "1.20.0";
+
 function responder(corpo: unknown, status = 200) {
+  if (corpo && typeof corpo === "object") corpo = { ...corpo, versao: FN_VERSION };
   return new Response(JSON.stringify(corpo), {
     status,
     headers: { ...cors, "Content-Type": "application/json" },
