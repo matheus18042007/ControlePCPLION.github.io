@@ -5,7 +5,7 @@
 (function () {
 'use strict';
 
-var APP_VERSION = '1.18.0';
+var APP_VERSION = '1.20.0';
 
 /* ---------------------------------------------------------
    Atalhos DOM
@@ -389,6 +389,16 @@ var MODULOS = [
     viewInicial: 'eficiencia-dia',
     pronto: true,
     tipo: 'eficiencia'
+  },
+  {
+    id: 'faltas',
+    nome: 'Faltas VG',
+    desc: 'Registro de faltas de peças, com base de componentes e aviso para todo mundo.',
+    icone: '⚠️',
+    titulo: 'Faltas VG',
+    viewInicial: 'faltas-lista',
+    pronto: true,
+    tipo: 'faltas'
   }
 ];
 
@@ -398,11 +408,12 @@ var MODULOS = [
 function motorDoTipo(tipo) {
   if (tipo === 'contagem') return window.ModuloContagem;
   if (tipo === 'eficiencia') return window.ModuloEficiencia;
+  if (tipo === 'faltas') return window.ModuloFaltas;
   return null;
 }
 
 function motoresAtivos() {
-  return [window.ModuloContagem, window.ModuloEficiencia].filter(Boolean);
+  return [window.ModuloContagem, window.ModuloEficiencia, window.ModuloFaltas].filter(Boolean);
 }
 
 function moduloPorId(id) {

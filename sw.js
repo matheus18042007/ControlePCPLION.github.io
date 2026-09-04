@@ -8,7 +8,7 @@
    Para publicar uma atualização: mudar CACHE_VERSION abaixo.
    ============================================================ */
 
-var CACHE_VERSION = 'pcp-lion-v1.18.0';
+var CACHE_VERSION = 'pcp-lion-v1.20.0';
 
 var ARQUIVOS = [
   './',
@@ -21,6 +21,8 @@ var ARQUIVOS = [
   './js/nuvem.js',
   './js/contagem.js',
   './js/eficiencia.js',
+  './js/push.js',
+  './js/faltas.js',
   './js/app.js',
   './vendor/sql-wasm.js',
   './vendor/sql-wasm.wasm',
@@ -54,6 +56,37 @@ self.addEventListener('activate', function (e) {
 
 self.addEventListener('message', function (e) {
   if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
+/* ---------- notificacoes (so o modulo Faltas VG usa) ---------- */
+
+self.addEventListener('push', function (e) {
+  var dados = { titulo: 'Faltas VG', corpo: 'Novas faltas registradas.' };
+  if (e.data) {
+    try { dados = e.data.json(); } catch (err) { dados.corpo = e.data.text(); }
+  }
+  e.waitUntil(
+    self.registration.showNotification(dados.titulo || 'Faltas VG', {
+      body: dados.corpo || '',
+      icon: './icons/icon-192.png',
+      badge: './icons/icon-192.png',
+      tag: 'faltas-vg',
+      renotify: true,
+      data: { url: './#faltas' }
+    })
+  );
+});
+
+self.addEventListener('notificationclick', function (e) {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (lista) {
+      for (var i = 0; i < lista.length; i++) {
+        if ('focus' in lista[i]) return lista[i].focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow('./#faltas');
+    })
+  );
 });
 
 self.addEventListener('fetch', function (e) {

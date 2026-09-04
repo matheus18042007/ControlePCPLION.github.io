@@ -524,10 +524,196 @@ var Nuvem = (function () {
     };
   }
 
+  /* =======================================================
+     MODULO FALTAS VG (registro de faltas de pecas)
+
+     Duas tabelas: faltas_componentes (codigo -> nome vigente,
+     importado por CSV) e faltas (o registro em si). Separadas
+     pela coluna "modulo", como os outros. Ver supabase_faltas.sql.
+  ======================================================= */
+  function faltas(modulo) {
+    var m = encodeURIComponent(modulo);
+
+    function puxarComponentes(aoProgredir) {
+      return puxarPaginado(
+        '/faltas_componentes?select=*&modulo=eq.' + m + '&order=codigo',
+        null, aoProgredir);
+    }
+
+    /* so as faltas em aberto - o que foi suprido fica no banco
+       para relatorio, mas nao precisa vir para o aparelho */
+    function puxarFaltas(aoProgredir) {
+      return puxarPaginado(
+        '/faltas?select=*&modulo=eq.' + m + '&suprida_em=is.null&order=criado_em.desc',
+        5000, aoProgredir);
+    }
+
+    function puxarTudo(aoProgredir) {
+      var nC = 0, nF = 0;
+      var passo = aoProgredir ? function () { aoProgredir(nC, nF); } : null;
+      return puxarComponentes(function (n) { nC = n; if (passo) passo(); })
+        .then(function (componentes) {
+          return puxarFaltas(function (n) { nF = n; if (passo) passo(); })
+            .then(function (lista) {
+              return { componentes: componentes || [], faltas: lista || [] };
+            });
+        });
+    }
+
+    function registrar(falta, usuario) {
+      return req('/rpc/faltas_registrar', {
+        method: 'POST',
+        body: {
+          p_modulo: modulo,
+          p_id: falta.id,
+          p_codigo: falta.codigo,
+          p_nome: falta.nome || '',
+          p_qtd: Number(falta.qtd) || 0,
+          p_usuario: usuario || null,
+          p_aparelho: aparelho()
+        }
+      });
+    }
+
+    function status(id, novoStatus, usuario) {
+      return req('/rpc/faltas_status', {
+        method: 'POST',
+        body: {
+          p_modulo: modulo,
+          p_id: id,
+          p_status: novoStatus || 'aberta',
+          p_usuario: usuario || null
+        }
+      });
+    }
+
+    function suprir(id, usuario) {
+      return req('/rpc/faltas_suprir', {
+        method: 'POST',
+        body: { p_modulo: modulo, p_id: id, p_usuario: usuario || null }
+      });
+    }
+
+    function reabrir(id, usuario) {
+      return req('/rpc/faltas_reabrir', {
+        method: 'POST',
+        body: { p_modulo: modulo, p_id: id, p_usuario: usuario || null }
+      });
+    }
+
+    function excluir(id, usuario) {
+      return req('/rpc/faltas_excluir', {
+        method: 'POST',
+        body: { p_modulo: modulo, p_id: id, p_usuario: usuario || null },
+        timeout: 30000
+      });
+    }
+
+    /* importacao do CSV: nome de quem ja existe e atualizado,
+       entao reimportar a planilha corrige os nomes vigentes */
+    function enviarComponentes(lista) {
+      if (!lista.length) return Promise.resolve([]);
+      var lotes = [], i;
+      var comModulo = lista.map(function (c) {
+        return { modulo: modulo, codigo: c.codigo, nome: c.nome,
+                 ordem: Number(c.ordem) || 0 };
+      });
+      for (i = 0; i < comModulo.length; i += 200) lotes.push(comModulo.slice(i, i + 200));
+
+      return lotes.reduce(function (p, lote) {
+        return p.then(function () {
+          return req('/faltas_componentes?on_conflict=modulo,codigo', {
+            method: 'POST',
+            headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+            body: lote,
+            timeout: 30000
+          });
+        });
+      }, Promise.resolve());
+    }
+
+    /* quando sai a proxima notificacao (so para mostrar na tela) */
+    function estadoNotificacao() {
+      return req('/faltas_notif_estado?select=*&modulo=eq.' + m)
+        .then(function (r) { return (r && r[0]) || null; });
+    }
+
+    return {
+      puxarTudo: puxarTudo,
+      puxarComponentes: puxarComponentes,
+      puxarFaltas: puxarFaltas,
+      registrar: registrar,
+      status: status,
+      suprir: suprir,
+      reabrir: reabrir,
+      excluir: excluir,
+      enviarComponentes: enviarComponentes,
+      estadoNotificacao: estadoNotificacao
+    };
+  }
+
+  /* =======================================================
+     PUSH - inscricao dos aparelhos e disparo
+
+     O envio em si mora numa Edge Function (supabase/functions/
+     faltas-notificar). Daqui so batemos na porta: ela e quem
+     decide se ja passaram os 60 segundos do cooldown.
+  ======================================================= */
+  var push = {
+    registrar: function (sub, usuario) {
+      var j = sub.toJSON ? sub.toJSON() : sub;
+      return req('/rpc/push_registrar', {
+        method: 'POST',
+        body: {
+          p_endpoint: j.endpoint,
+          p_p256dh: j.keys && j.keys.p256dh,
+          p_auth: j.keys && j.keys.auth,
+          p_usuario: usuario || null,
+          p_aparelho: aparelho()
+        }
+      });
+    },
+
+    remover: function (endpoint) {
+      return req('/rpc/push_remover', {
+        method: 'POST',
+        body: { p_endpoint: endpoint }
+      });
+    },
+
+    /* dispara o flush. Nunca deve derrubar quem chamou:
+       falta registrada vale mais que notificacao entregue. */
+    notificar: function (modulo, forcar) {
+      if (!ativa()) return Promise.resolve(null);
+      var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 15000) : null;
+
+      return fetch(cfg.url + '/functions/v1/faltas-notificar', {
+        method: 'POST',
+        headers: {
+          apikey: cfg.key,
+          Authorization: 'Bearer ' + cfg.key,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ modulo: modulo || 'faltas', forcar: !!forcar }),
+        cache: 'no-store',
+        signal: ctrl ? ctrl.signal : undefined
+      }).then(function (r) {
+        if (timer) clearTimeout(timer);
+        return r.json().catch(function () { return null; });
+      }).catch(function () {
+        if (timer) clearTimeout(timer);
+        return null;
+      });
+    }
+  };
+
   return {
     carregar: carregar,
     contagem: contagem,
     eficiencia: eficiencia,
+    faltas: faltas,
+    push: push,
     ativa: ativa,
     conectado: conectado,
     config: config,

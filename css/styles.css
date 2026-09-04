@@ -422,3 +422,25 @@ input:focus{border-color:var(--accent)}
   touch-action:none;user-select:none
 }
 .visor-palco img{max-width:100%;max-height:100%;transform-origin:center center}
+
+/* ================= Faltas VG ================= */
+.falta-topo{margin-bottom:10px}
+.falta-li{border-left:3px solid var(--muted)}
+.falta-li.aberta{border-left-color:var(--danger)}
+.falta-li.produzindo{border-left-color:var(--warn)}
+.falta-li.transferencia{border-left-color:var(--accent)}
+.falta-li.sera{border-left-color:var(--ok)}
+.falta-li{cursor:pointer}
+.falta-row{display:grid;grid-template-columns:1fr 152px;gap:8px;align-items:center}
+.falta-sit{
+  background:var(--card-2);color:var(--txt);
+  border:1px solid var(--line);border-radius:9px;
+  padding:8px 8px;font-size:13.5px;width:100%;
+}
+/* suprida só aparece quando a linha está expandida */
+.falta-sup{display:none}
+.falta-li.aberto .falta-sup{
+  display:flex;align-items:center;gap:8px;
+  margin-top:10px;padding-top:10px;border-top:1px solid var(--line);
+  font-size:13px;cursor:pointer
+}
