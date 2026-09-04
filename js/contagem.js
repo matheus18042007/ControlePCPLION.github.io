@@ -104,6 +104,10 @@ window.ModuloContagem = (function () {
     var MOV = cfg.tabelaMov;               // ex.: 'movimentacoes_quadros'
     var IDB = 'pcp_' + id;
     var UN = cfg.unidade || 'pç';
+    /* foto de referência no item: por enquanto só Carenagens VG.
+       Fica no IndexedDB local (kv: foto_<codigo>), fora do SQLite,
+       porque a sincronização apaga e regrava a tabela de itens. */
+    var TEM_FOTO = (id === 'carenagem');
 
     var db = null, saveTimer = null, montado = false, promessa = null;
     var estado = { busca: '', movFiltro: 'TODOS', itemAtual: null, editando: false };
@@ -403,6 +407,17 @@ window.ModuloContagem = (function () {
         '      <b id="' + id + 'QtdNome">-</b>',
         '      <small id="' + id + 'QtdAtual" class="muted"></small>',
         '    </div>',
+        TEM_FOTO ? [
+          '    <div class="foto-box">',
+          '      <img id="' + id + 'FotoImg" class="foto-thumb hidden" alt="Foto de referência">',
+          '      <p id="' + id + 'FotoVazio" class="muted small">Sem foto de referência.</p>',
+          '      <input id="' + id + 'FotoFile" type="file" accept="image/*" hidden>',
+          '      <div class="foto-acts">',
+          '        <button id="' + id + 'FotoAdd" class="btn ghost" type="button">📷 Foto</button>',
+          '        <button id="' + id + 'FotoDel" class="btn ghost hidden" type="button">🗑️ Remover foto</button>',
+          '      </div>',
+          '    </div>'
+        ].join('\n') : '',
         '    <label class="lbl">Quantidade contada</label>',
         '    <div class="qty">',
         '      <button class="qty-btn" data-' + id + 'passo="-1" type="button">-</button>',
@@ -436,12 +451,35 @@ window.ModuloContagem = (function () {
         '      <label class="lbl">Qtd inicial</label>',
         '      <input id="' + id + 'CadQtd" type="number" step="any" value="0">',
         '    </div>',
+        TEM_FOTO ? [
+          '    <label class="lbl">Foto de referência</label>',
+          '    <div class="foto-box">',
+          '      <img id="' + id + 'CadFotoImg" class="foto-thumb hidden" alt="Foto de referência">',
+          '      <p id="' + id + 'CadFotoVazio" class="muted small">Sem foto de referência.</p>',
+          '      <input id="' + id + 'CadFotoFile" type="file" accept="image/*" hidden>',
+          '      <div class="foto-acts">',
+          '        <button id="' + id + 'CadFotoAdd" class="btn ghost" type="button">📷 Foto</button>',
+          '        <button id="' + id + 'CadFotoDel" class="btn ghost hidden" type="button">🗑 Remover foto</button>',
+          '      </div>',
+          '    </div>'
+        ].join('\n') : '',
         '    <div class="sheet-actions">',
         '      <button class="btn ghost" data-' + id + 'fechar="1" type="button">Cancelar</button>',
         '      <button id="' + id + 'CadSalvar" class="btn primary" type="button">Salvar</button>',
         '    </div>',
         '  </div>',
-        '</div>'
+        '</div>',
+        TEM_FOTO ? [
+          '<div id="' + id + 'Visor" class="visor hidden">',
+          '  <div class="visor-bar">',
+          '    <button id="' + id + 'VisorSair" class="btn ghost" type="button">← Voltar</button>',
+          '    <span id="' + id + 'VisorNome" class="muted small"></span>',
+          '  </div>',
+          '  <div id="' + id + 'VisorPalco" class="visor-palco">',
+          '    <img id="' + id + 'VisorImg" alt="Foto de referência">',
+          '  </div>',
+          '</div>'
+        ].join('\n') : ''
       ].join('\n');
       while (sheets.firstChild) document.body.appendChild(sheets.firstChild);
 
@@ -454,6 +492,118 @@ window.ModuloContagem = (function () {
       $(id + 'SheetCad').classList.remove('open');
     }
 
+    /* ---------- foto de referência (só TEM_FOTO) ---------- */
+    var fotoAtual = null;
+
+    function mostrarFoto(dataUrl) {
+      fotoAtual = dataUrl || null;
+      var img = $(id + 'FotoImg');
+      img.classList.toggle('hidden', !fotoAtual);
+      if (fotoAtual) img.src = fotoAtual;
+      $(id + 'FotoVazio').classList.toggle('hidden', !!fotoAtual);
+      $(id + 'FotoDel').classList.toggle('hidden', !fotoAtual);
+      $(id + 'FotoAdd').textContent = fotoAtual ? '📷 Trocar foto' : '📷 Foto';
+    }
+
+    /* a foto oficial mora na nuvem (contagem_fotos), igual para todo mundo.
+       O IndexedDB local é só cache, para abrir rápido e funcionar offline. */
+    function ainda(codigo) {
+      return estado.itemAtual && estado.itemAtual.codigo === codigo;
+    }
+
+    function carregarFoto(codigo) {
+      mostrarFoto(null);
+      idbGet(IDB, 'foto_' + codigo).then(function (v) {
+        if (v && ainda(codigo)) mostrarFoto(v);
+      }).catch(function () {});
+
+      var api = nv();
+      if (!api) return;
+      api.puxarFoto(codigo).then(function (url) {
+        if (ainda(codigo)) mostrarFoto(url);
+        return idbSet(IDB, 'foto_' + codigo, url || null);
+      }).catch(function () {});   // offline: fica o cache
+    }
+
+    /* reduz a imagem antes de guardar: celular tira foto de 4 MB */
+    function comprimir(file, aoPronto) {
+      var fr = new FileReader();
+      fr.onload = function () {
+        var im = new Image();
+        im.onload = function () {
+          var MAX = 1000;   /* vai para o banco em base64: segura o tamanho */
+          var e = Math.min(1, MAX / Math.max(im.width, im.height));
+          var cv = document.createElement('canvas');
+          cv.width = Math.round(im.width * e);
+          cv.height = Math.round(im.height * e);
+          cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+          aoPronto(cv.toDataURL('image/jpeg', 0.72));
+        };
+        im.onerror = function () { toast('Imagem inválida', 'err'); };
+        im.src = fr.result;
+      };
+      fr.onerror = function () { toast('Erro ao ler a imagem', 'err'); };
+      fr.readAsDataURL(file);
+    }
+
+    function salvarFoto(file) {
+      var it = estado.itemAtual;
+      if (!it) return;
+      var api = nv();
+      if (!api) { toast('Sem nuvem: entre online para salvar a foto', 'err'); return; }
+
+      comprimir(file, function (url) {
+        if (ainda(it.codigo)) mostrarFoto(url);
+        var b = $(id + 'FotoAdd');
+        var rotulo = b.textContent;
+        b.disabled = true; b.textContent = 'Enviando foto...';
+        api.salvarFoto(it.codigo, url, P.operador() || null).then(function () {
+          toast('Foto salva para todos', 'ok');
+          return idbSet(IDB, 'foto_' + it.codigo, url);
+        }).catch(function (e) {
+          toast('Erro ao enviar foto: ' + e.message, 'err');
+          if (ainda(it.codigo)) carregarFoto(it.codigo);
+        }).then(function () {
+          b.disabled = false;
+          if (b.textContent === 'Enviando foto...') b.textContent = rotulo;
+        });
+      });
+    }
+
+    function removerFoto() {
+      var it = estado.itemAtual;
+      if (!it || !confirm('Remover a foto deste item? Ela sai para todo mundo.')) return;
+      var api = nv();
+      if (!api) { toast('Sem nuvem: entre online para remover a foto', 'err'); return; }
+
+      api.apagarFoto(it.codigo).then(function () {
+        if (ainda(it.codigo)) mostrarFoto(null);
+        toast('Foto removida', 'ok');
+        return idbSet(IDB, 'foto_' + it.codigo, null);
+      }).catch(function (e) { toast('Erro ao remover foto: ' + e.message, 'err'); });
+    }
+
+    /* ---------- visor em tela cheia (zoom + arrastar) ---------- */
+    var vz = { esc: 1, x: 0, y: 0, d0: 0, e0: 1, px: 0, py: 0, arrastando: false };
+
+    function aplicarZoom() {
+      $(id + 'VisorImg').style.transform =
+        'translate(' + vz.x + 'px,' + vz.y + 'px) scale(' + vz.esc + ')';
+    }
+
+    function abrirVisor() {
+      if (!fotoAtual) return;
+      vz.esc = 1; vz.x = 0; vz.y = 0;
+      $(id + 'VisorImg').src = fotoAtual;
+      $(id + 'VisorNome').textContent = estado.itemAtual
+        ? estado.itemAtual.codigo + ' — ' + estado.itemAtual.nome : '';
+      aplicarZoom();
+      $(id + 'Visor').classList.remove('hidden');
+    }
+
+    function fecharVisor() { $(id + 'Visor').classList.add('hidden'); }
+    function visorAberto() { return TEM_FOTO && !$(id + 'Visor').classList.contains('hidden'); }
+
     function abrirQtd(codigo) {
       var it = um('SELECT * FROM ' + TAB + ' WHERE codigo = ?', [codigo]);
       if (!it) { toast('Item não encontrado', 'err'); return; }
@@ -462,6 +612,7 @@ window.ModuloContagem = (function () {
       $(id + 'QtdAtual').textContent = 'Qtd atual: ' + P.fmtNum(it.qtd) + ' ' + UN;
       $(id + 'QtdInput').value = it.qtd;
       $(id + 'QtdObs').value = '';
+      if (TEM_FOTO) carregarFoto(codigo);
       previaQtd();
       $(id + 'SheetQtd').classList.add('open');
       setTimeout(function () { $(id + 'QtdInput').select(); }, 120);
@@ -579,7 +730,55 @@ window.ModuloContagem = (function () {
       $(id + 'CadNome').value = item ? item.nome : '';
       $(id + 'CadQtd').value = item ? item.qtd : 0;
       $(id + 'CadQtdWrap').classList.toggle('hidden', !!item);
+      if (TEM_FOTO) {
+        mostrarCadFoto(null);
+        cadFotoMudou = false;
+        if (item) {
+          idbGet(IDB, 'foto_' + item.codigo)
+            .then(function (v) { if (v && !cadFotoMudou) mostrarCadFoto(v); })
+            .catch(function () {});
+          var api = nv();
+          if (api) api.puxarFoto(item.codigo)
+            .then(function (u) { if (!cadFotoMudou) mostrarCadFoto(u); }).catch(function () {});
+        }
+      }
       $(id + 'SheetCad').classList.add('open');
+    }
+
+    /* foto escolhida na tela de cadastro: só sobe depois que o item existe */
+    var cadFoto = null;        // o que está na tela
+    var cadFotoMudou = false;  // o usuário trocou/removeu nesta abertura?
+
+    function mostrarCadFoto(url) {
+      cadFoto = url || null;
+      var img = $(id + 'CadFotoImg');
+      img.classList.toggle('hidden', !cadFoto);
+      if (cadFoto) img.src = cadFoto;
+      $(id + 'CadFotoVazio').classList.toggle('hidden', !!cadFoto);
+      $(id + 'CadFotoDel').classList.toggle('hidden', !cadFoto);
+      $(id + 'CadFotoAdd').textContent = cadFoto ? '📷 Trocar foto' : '📷 Foto';
+    }
+
+    /* depois que o item existe, manda a foto escolhida no cadastro */
+    function gravarFotoCadastro(codigo) {
+      if (!TEM_FOTO || !cadFotoMudou) return;
+      var url = cadFoto;
+      cadFotoMudou = false;
+      idbSet(IDB, 'foto_' + codigo, url || null).catch(function () {});
+      if (estado.itemAtual && estado.itemAtual.codigo === codigo) mostrarFoto(url);
+      var api = nv();
+      if (!api) { toast('Foto ficou só neste aparelho (sem nuvem)', 'err'); return; }
+      var p = url ? api.salvarFoto(codigo, url, P.operador() || null) : api.apagarFoto(codigo);
+      p.then(function () { toast(url ? 'Foto salva para todos' : 'Foto removida', 'ok'); })
+       .catch(function (e) { toast('Foto NÃO foi para a nuvem: ' + e.message, 'err'); });
+    }
+
+    /* item excluído -> foto vai junto (local e nuvem) */
+    function apagarFotoDoItem(codigo) {
+      if (!TEM_FOTO) return;
+      idbSet(IDB, 'foto_' + codigo, null).catch(function () {});
+      var api = nv();
+      if (api) api.apagarFoto(codigo).catch(function () {});
     }
 
     function salvarCadastro() {
@@ -606,6 +805,7 @@ window.ModuloContagem = (function () {
           }
         }
         salvar(true);
+        gravarFotoCadastro(cod);
         fecharSheets();
         toast('Item salvo', 'ok');
         render();
@@ -629,6 +829,7 @@ window.ModuloContagem = (function () {
             );
           }
           salvar(true);
+          gravarFotoCadastro(cod);
           statusNuvem();
           fecharSheets();
           toast('Item salvo', 'ok');
@@ -866,6 +1067,7 @@ window.ModuloContagem = (function () {
         db.run('DELETE FROM ' + MOV + ' WHERE codigo_item = ?', [cod]);
         db.run('DELETE FROM ' + TAB + ' WHERE codigo = ?', [cod]);
         salvar(true);
+        apagarFotoDoItem(cod);
         $(id + 'ExcluirCodigo').value = '';
         toast('Item excluído', 'ok');
         render();
@@ -944,6 +1146,80 @@ window.ModuloContagem = (function () {
           previaQtd();
         });
       });
+      /* foto na tela de cadastro */
+      if (TEM_FOTO) {
+        $(id + 'CadFotoAdd').addEventListener('click', function () { $(id + 'CadFotoFile').click(); });
+        $(id + 'CadFotoDel').addEventListener('click', function () {
+          cadFotoMudou = true; mostrarCadFoto(null);
+        });
+        $(id + 'CadFotoFile').addEventListener('change', function (ev) {
+          var f = ev.target.files && ev.target.files[0];
+          ev.target.value = '';
+          if (!f) return;
+          comprimir(f, function (url) { cadFotoMudou = true; mostrarCadFoto(url); });
+        });
+      }
+
+      /* foto do item */
+      if (TEM_FOTO) {
+        $(id + 'FotoAdd').addEventListener('click', function () { $(id + 'FotoFile').click(); });
+        $(id + 'FotoDel').addEventListener('click', removerFoto);
+        $(id + 'FotoFile').addEventListener('change', function (ev) {
+          var f = ev.target.files && ev.target.files[0];
+          if (f) salvarFoto(f);
+          ev.target.value = '';
+        });
+        $(id + 'FotoImg').addEventListener('click', abrirVisor);
+        $(id + 'VisorSair').addEventListener('click', fecharVisor);
+
+        /* botão voltar do Android */
+        window.addEventListener('popstate', function () {
+          if (visorAberto()) fecharVisor();
+        });
+        document.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Escape' && visorAberto()) fecharVisor();
+        });
+
+        /* zoom: pinça com 2 dedos, arrastar com 1, toque duplo alterna */
+        var palco = $(id + 'VisorPalco');
+        var dist = function (t) {
+          var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+          return Math.sqrt(dx * dx + dy * dy);
+        };
+        palco.addEventListener('touchstart', function (ev) {
+          if (ev.touches.length === 2) {
+            vz.d0 = dist(ev.touches); vz.e0 = vz.esc; vz.arrastando = false;
+          } else if (ev.touches.length === 1) {
+            vz.arrastando = true;
+            vz.px = ev.touches[0].clientX - vz.x;
+            vz.py = ev.touches[0].clientY - vz.y;
+          }
+        }, { passive: true });
+        palco.addEventListener('touchmove', function (ev) {
+          if (ev.touches.length === 2 && vz.d0) {
+            vz.esc = Math.min(6, Math.max(1, vz.e0 * (dist(ev.touches) / vz.d0)));
+            if (vz.esc === 1) { vz.x = 0; vz.y = 0; }
+            aplicarZoom();
+            ev.preventDefault();
+          } else if (vz.arrastando && ev.touches.length === 1 && vz.esc > 1) {
+            vz.x = ev.touches[0].clientX - vz.px;
+            vz.y = ev.touches[0].clientY - vz.py;
+            aplicarZoom();
+            ev.preventDefault();
+          }
+        }, { passive: false });
+        palco.addEventListener('touchend', function () { vz.d0 = 0; vz.arrastando = false; });
+        palco.addEventListener('dblclick', function () {
+          vz.esc = vz.esc > 1 ? 1 : 2.5; vz.x = 0; vz.y = 0; aplicarZoom();
+        });
+        palco.addEventListener('wheel', function (ev) {
+          vz.esc = Math.min(6, Math.max(1, vz.esc - ev.deltaY * 0.002));
+          if (vz.esc === 1) { vz.x = 0; vz.y = 0; }
+          aplicarZoom();
+          ev.preventDefault();
+        }, { passive: false });
+      }
+
       $(id + 'QtdSalvar').addEventListener('click', confirmarQtd);
       $(id + 'CadSalvar').addEventListener('click', salvarCadastro);
       P.qsa('[data-' + id + 'fechar]').forEach(function (b) {

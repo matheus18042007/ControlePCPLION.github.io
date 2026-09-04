@@ -406,3 +406,19 @@ input:focus{border-color:var(--accent)}
 .badge.integral{background:rgba(40,199,111,.16);color:var(--ok)}
 .badge.parcial{background:rgba(255,183,3,.16);color:var(--warn)}
 .badge.falta{background:rgba(255,77,79,.16);color:var(--danger)}
+
+/* ---------- foto de referência do item (Carenagens VG) ---------- */
+.foto-box{margin:10px 0}
+.foto-thumb{
+  width:100%;max-height:200px;object-fit:contain;border-radius:10px;
+  background:#000;cursor:zoom-in;display:block
+}
+.foto-acts{display:flex;gap:8px;margin-top:8px}
+.foto-acts .btn{flex:1}
+.visor{position:fixed;inset:0;z-index:120;background:#000;display:flex;flex-direction:column}
+.visor-bar{display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(0,0,0,.85)}
+.visor-palco{
+  flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;
+  touch-action:none;user-select:none
+}
+.visor-palco img{max-width:100%;max-height:100%;transform-origin:center center}

@@ -266,6 +266,33 @@ var Nuvem = (function () {
         });
     }
 
+    /* ---------- foto de referencia do item ----------
+       Tabela propria (contagem_fotos), fora de contagem_itens,
+       porque a sincronizacao apaga e regrava os itens.
+       Ver supabase_fotos.sql. */
+    function puxarFoto(codigo) {
+      return req('/contagem_fotos?select=foto&modulo=eq.' + m +
+                 '&codigo=eq.' + encodeURIComponent(codigo) + '&limit=1',
+                 { timeout: 30000 })
+        .then(function (r) { return (r && r[0]) ? r[0].foto : null; });
+    }
+
+    function salvarFotoNuvem(codigo, foto, usuario) {
+      return req('/contagem_fotos?on_conflict=modulo,codigo', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: [{ modulo: modulo, codigo: codigo, foto: foto,
+                 usuario: usuario || null, atualizado_em: new Date().toISOString() }],
+        timeout: 60000
+      });
+    }
+
+    function apagarFoto(codigo) {
+      return req('/contagem_fotos?modulo=eq.' + m +
+                 '&codigo=eq.' + encodeURIComponent(codigo),
+                 { method: 'DELETE', timeout: 30000 });
+    }
+
     /* absoluto = true  -> "a quantidade agora e esta"
        absoluto = false -> "some/subtraia isto" (botoes - e +) */
     function definir(codigo, qtd, absoluto, usuario, obs) {
@@ -359,7 +386,10 @@ var Nuvem = (function () {
       cadastrar: cadastrar,
       zerar: zerar,
       excluir: excluir,
-      enviarItens: enviarItens
+      enviarItens: enviarItens,
+      puxarFoto: puxarFoto,
+      salvarFoto: salvarFotoNuvem,
+      apagarFoto: apagarFoto
     };
   }
 
