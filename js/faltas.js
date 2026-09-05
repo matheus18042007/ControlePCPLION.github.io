@@ -130,7 +130,22 @@ window.ModuloFaltas = (function () {
     var IDB = 'pcp_' + id;
 
     var db = null, saveTimer = null, montado = false, promessa = null;
-    var estado = { busca: '', apiNuvem: null };
+    var estado = { busca: '', apiNuvem: null, filtroAlm: '', almNova: '' };
+
+    /* almoxarifados do modulo */
+    var ALMOX = [
+      { cod: 'frente', label: 'Frente' },
+      { cod: 'fundo',  label: 'Fundo'  }
+    ];
+    function labelAlmox(cod) {
+      for (var i = 0; i < ALMOX.length; i++) if (ALMOX[i].cod === cod) return ALMOX[i].label;
+      return '-';
+    }
+    function normAlmox(v) {
+      var s = String(v || '').trim().toLowerCase();
+      for (var i = 0; i < ALMOX.length; i++) if (ALMOX[i].cod === s) return s;
+      return 'frente';
+    }
 
     var SCHEMA = [
       'CREATE TABLE IF NOT EXISTS componentes (',
@@ -144,12 +159,31 @@ window.ModuloFaltas = (function () {
       '  nome       TEXT NOT NULL DEFAULT "",',
       '  qtd        REAL NOT NULL DEFAULT 0,',
       '  status     TEXT NOT NULL DEFAULT "aberta",',
+      '  almoxarifado TEXT NOT NULL DEFAULT "frente",',
       '  criado_em  DATETIME,',
       '  criado_por TEXT',
       ');',
       'CREATE INDEX IF NOT EXISTS ix_faltas_criado ON faltas (criado_em DESC);',
       'CREATE INDEX IF NOT EXISTS ix_comp_nome ON componentes (nome);'
     ].join('\n');
+
+    /* bancos locais gravados antes do almoxarifado nao tem a coluna */
+    function migrarBanco() {
+      var tem = false;
+      try {
+        var st = db.prepare('PRAGMA table_info(faltas)');
+        while (st.step()) {
+          if (String(st.getAsObject().name) === 'almoxarifado') tem = true;
+        }
+        st.free();
+      } catch (e) { return; }
+      if (!tem) {
+        try {
+          db.run('ALTER TABLE faltas ADD COLUMN almoxarifado TEXT NOT NULL DEFAULT "frente"');
+          salvar(true);
+        } catch (e) {}
+      }
+    }
 
     function abrirBanco() {
       return initSqlJs({ locateFile: function (f) { return './vendor/' + f; } })
@@ -162,6 +196,8 @@ window.ModuloFaltas = (function () {
               db = new SQL.Database();
             }
             db.run(SCHEMA);
+            migrarBanco();
+            juntarDuplicados();
           });
         });
     }
@@ -210,9 +246,15 @@ window.ModuloFaltas = (function () {
         '    <input id="' + id + 'Busca" type="search" inputmode="search" placeholder="Buscar código ou nome..." autocomplete="off">',
         '    <button id="' + id + 'LimpaBusca" class="icon-btn" type="button" aria-label="Limpar">&times;</button>',
         '  </div>',
-        '  <div class="filters">',
+        '  <div class="filters falta-filtros">',
         '    <span class="muted small">Em falta: <b id="' + id + 'Resumo">0</b></span>',
+        '    <span class="falta-espaco"></span>',
         '    <button id="' + id + 'Sync2" class="pill" type="button">&#8635; Atualizar</button>',
+        '    <select id="' + id + 'FiltroAlm" class="falta-alm-filtro" aria-label="Filtrar por almoxarifado">',
+        '      <option value="">Todos</option>',
+        '      <option value="frente">Frente</option>',
+        '      <option value="fundo">Fundo</option>',
+        '    </select>',
         '  </div>',
         '  <div id="' + id + 'Lista" class="list"></div>',
         '</section>',
@@ -274,6 +316,11 @@ window.ModuloFaltas = (function () {
         '  <div class="sheet">',
         '    <div class="sheet-handle"></div>',
         '    <h3>Registrar falta</h3>',
+        '    <label class="lbl">Almoxarifado *</label>',
+        '    <div class="falta-alm-opts" id="' + id + 'AlmOpts">',
+        '      <button type="button" data-alm="frente">Frente</button>',
+        '      <button type="button" data-alm="fundo">Fundo</button>',
+        '    </div>',
         '    <label class="lbl">Código do componente *</label>',
         '    <input id="' + id + 'Codigo" type="text" inputmode="text" autocomplete="off" list="' + id + 'Componentes">',
         '    <datalist id="' + id + 'Componentes"></datalist>',
@@ -330,8 +377,9 @@ window.ModuloFaltas = (function () {
             [c.codigo, c.nome, Number(c.ordem) || 0]);
         });
         (dados.faltas || []).forEach(function (f) {
-          db.run('INSERT INTO faltas (id,codigo,nome,qtd,status,criado_em,criado_por) VALUES (?,?,?,?,?,?,?)',
+          db.run('INSERT INTO faltas (id,codigo,nome,qtd,status,almoxarifado,criado_em,criado_por) VALUES (?,?,?,?,?,?,?,?)',
             [f.id, f.codigo, f.nome || '', Number(f.qtd) || 0, normStatus(f.status),
+             normAlmox(f.almoxarifado),
              P.paraLocal(f.criado_em), f.criado_por || null]);
         });
         db.run('COMMIT');
@@ -357,6 +405,7 @@ window.ModuloFaltas = (function () {
           return false;
         }
         gravarCache(d);
+        juntarDuplicados();
         statusNuvem();
         render();
         if (!silencioso) toast('Sincronizado · ' + d.faltas.length + ' faltas em aberto', 'ok');
@@ -396,10 +445,20 @@ window.ModuloFaltas = (function () {
       return c ? c.nome : '';
     }
 
+    function pintarAlmOpts() {
+      var box = $(id + 'AlmOpts');
+      if (!box) return;
+      qsa('#' + id + 'AlmOpts button').forEach(function (b) {
+        b.classList.toggle('on', b.getAttribute('data-alm') === estado.almNova);
+      });
+    }
+
     function abrirNova() {
       $(id + 'Codigo').value = '';
       $(id + 'Nome').value = '';
       $(id + 'Qtd').value = '1';
+      estado.almNova = '';
+      pintarAlmOpts();
       $(id + 'SheetNova').classList.add('open');
       setTimeout(function () { $(id + 'Codigo').focus(); }, 120);
     }
@@ -420,7 +479,69 @@ window.ModuloFaltas = (function () {
       }).join('');
     }
 
+    /* uma falta por codigo + almoxarifado */
+    function chaveFalta(codigo, almox) {
+      return String(codigo || '').trim().toUpperCase() + '|' + normAlmox(almox);
+    }
+
+    function acharFalta(codigo, almox) {
+      var alvo = chaveFalta(codigo, almox);
+      var lista = sel('SELECT * FROM faltas ORDER BY criado_em ASC');
+      for (var i = 0; i < lista.length; i++) {
+        if (chaveFalta(lista[i].codigo, lista[i].almoxarifado) === alvo) return lista[i];
+      }
+      return null;
+    }
+
+    /* junta linhas repetidas que ja estavam no banco (ou vieram da nuvem).
+       A mais antiga fica e recebe a soma; as outras somem daqui e de la. */
+    function juntarDuplicados() {
+      var lista = sel('SELECT * FROM faltas ORDER BY criado_em ASC');
+      var donos = {}, fundidos = [], sobras = [];
+
+      lista.forEach(function (f) {
+        var k = chaveFalta(f.codigo, f.almoxarifado);
+        if (!donos[k]) { donos[k] = f; return; }
+        var dono = donos[k];
+        dono.qtd = (Number(dono.qtd) || 0) + (Number(f.qtd) || 0);
+        if (!dono.nome) dono.nome = f.nome;
+        if (fundidos.indexOf(dono) < 0) fundidos.push(dono);
+        sobras.push(f.id);
+      });
+
+      if (!sobras.length) return false;
+
+      db.run('BEGIN');
+      try {
+        fundidos.forEach(function (d) {
+          db.run('UPDATE faltas SET qtd = ?, nome = ? WHERE id = ?', [d.qtd, d.nome || '', d.id]);
+        });
+        sobras.forEach(function (fid) {
+          db.run('DELETE FROM faltas WHERE id = ?', [fid]);
+        });
+        db.run('COMMIT');
+      } catch (e) {
+        try { db.run('ROLLBACK'); } catch (e2) {}
+        return false;
+      }
+      salvar(true);
+
+      /* espelha na nuvem, senao a proxima sincronizacao traz tudo de volta */
+      var api = nv();
+      if (api) {
+        fundidos.forEach(function (d) {
+          api.registrar(d, P.operador())['catch'](function () {});
+        });
+        sobras.forEach(function (fid) {
+          api.excluir(fid, P.operador())['catch'](function () {});
+        });
+      }
+      return true;
+    }
+
     function adicionarFalta() {
+      if (!estado.almNova) { toast('Selecione o almoxarifado (Frente ou Fundo)', 'err'); return; }
+
       var codigo = String($(id + 'Codigo').value || '').trim();
       if (!codigo) { toast('Digite o código do componente', 'err'); return; }
 
@@ -428,23 +549,47 @@ window.ModuloFaltas = (function () {
       if (!nome && !confirm('Código "' + codigo + '" não está na base de componentes.\n\nRegistrar assim mesmo?')) return;
 
       var qtd = num($(id + 'Qtd').value);
-      var registro = {
-        id: novoId(),
-        codigo: codigo,
-        nome: nome,
-        qtd: qtd,
-        status: 'aberta',
-        criado_em: P.agoraISO(),
-        criado_por: P.operador() || null
-      };
 
-      db.run('INSERT INTO faltas (id,codigo,nome,qtd,status,criado_em,criado_por) VALUES (?,?,?,?,?,?,?)',
-        [registro.id, registro.codigo, registro.nome, registro.qtd,
-         registro.status, registro.criado_em, registro.criado_por]);
+      /* mesmo código no mesmo almoxarifado nao vira segunda linha:
+         soma na que ja existe (#faltas-duplicadas) */
+      var existente = acharFalta(codigo, estado.almNova);
+      var registro;
+
+      if (existente) {
+        registro = {
+          id: existente.id,
+          codigo: existente.codigo,
+          nome: existente.nome || nome,
+          qtd: (Number(existente.qtd) || 0) + qtd,
+          status: existente.status,
+          almoxarifado: normAlmox(existente.almoxarifado),
+          criado_em: existente.criado_em,
+          criado_por: existente.criado_por || null
+        };
+        db.run('UPDATE faltas SET qtd = ?, nome = ? WHERE id = ?',
+          [registro.qtd, registro.nome, registro.id]);
+      } else {
+        registro = {
+          id: novoId(),
+          codigo: codigo,
+          nome: nome,
+          qtd: qtd,
+          status: 'aberta',
+          almoxarifado: estado.almNova,
+          criado_em: P.agoraISO(),
+          criado_por: P.operador() || null
+        };
+        db.run('INSERT INTO faltas (id,codigo,nome,qtd,status,almoxarifado,criado_em,criado_por) VALUES (?,?,?,?,?,?,?,?)',
+          [registro.id, registro.codigo, registro.nome, registro.qtd,
+           registro.status, registro.almoxarifado, registro.criado_em, registro.criado_por]);
+      }
+
       salvar();
       fecharSheets();
       render();
-      toast('Falta registrada', 'ok');
+      toast(existente
+        ? 'Somado à falta existente: ' + P.fmtNum(registro.qtd)
+        : 'Falta registrada', 'ok');
 
       var api = nv();
       if (!api) { semNuvem(); return; }
@@ -491,6 +636,9 @@ window.ModuloFaltas = (function () {
     function faltasVisiveis() {
       var q = semAcento(estado.busca).toLowerCase();
       var lista = sel('SELECT * FROM faltas ORDER BY criado_em DESC');
+      if (estado.filtroAlm) {
+        lista = lista.filter(function (f) { return normAlmox(f.almoxarifado) === estado.filtroAlm; });
+      }
       if (!q) return lista;
       return lista.filter(function (f) {
         return semAcento(f.codigo + ' ' + f.nome).toLowerCase().indexOf(q) >= 0;
@@ -504,7 +652,7 @@ window.ModuloFaltas = (function () {
 
       if (!lista.length) {
         el.innerHTML = '<div class="vazio">' +
-          (estado.busca ? 'Nada encontrado.' : 'Nenhuma falta registrada.<br>Toque em "Registrar falta".') +
+          (estado.busca || estado.filtroAlm ? 'Nada encontrado.' : 'Nenhuma falta registrada.<br>Toque em "Registrar falta".') +
           '</div>';
         return;
       }
@@ -519,7 +667,9 @@ window.ModuloFaltas = (function () {
           '  <div class="falta-row">' +
           '    <div class="li-main">' +
           '      <div class="li-code">' + esc(f.codigo) + '</div>' +
-          '      <div class="li-nome">' + esc(f.nome || '(sem nome na base)') + '</div>' +
+          '      <div class="li-nome">' + esc(f.nome || '(sem nome na base)') +
+                   ' <span class="falta-alm ' + normAlmox(f.almoxarifado) + '">' +
+                   esc(labelAlmox(f.almoxarifado)) + '</span></div>' +
           '      <div class="li-sub">Falta ' + P.fmtNum(f.qtd) + ' · ' +
                    esc(f.criado_por || '-') + ' · ' + esc(P.fmtDataHora(f.criado_em)) + '</div>' +
           '    </div>' +
@@ -616,14 +766,15 @@ window.ModuloFaltas = (function () {
     }
 
     function exportarCsv() {
-      var lista = sel('SELECT codigo,nome,qtd,status,criado_em,criado_por FROM faltas ORDER BY criado_em DESC');
+      var lista = sel('SELECT codigo,nome,qtd,status,almoxarifado,criado_em,criado_por FROM faltas ORDER BY criado_em DESC');
       if (!lista.length) { toast('Nenhuma falta para exportar', 'err'); return; }
       var linhas = lista.map(function (f) {
         return { codigo: f.codigo, nome: f.nome, qtd: f.qtd,
+                 almoxarifado: labelAlmox(f.almoxarifado),
                  situacao: labelStatus(f.status), registrado_em: f.criado_em,
                  registrado_por: f.criado_por || '' };
       });
-      var txt = P.csvDe(['codigo', 'nome', 'qtd', 'situacao', 'registrado_em', 'registrado_por'], linhas);
+      var txt = P.csvDe(['codigo', 'nome', 'qtd', 'almoxarifado', 'situacao', 'registrado_em', 'registrado_por'], linhas);
       P.baixar(new Blob([txt], { type: 'text/csv;charset=utf-8' }),
                id + '_' + P.carimbo() + '.csv');
       toast('CSV gerado (pasta Downloads)', 'ok');
@@ -713,6 +864,20 @@ window.ModuloFaltas = (function () {
 
       $(id + 'Sync').addEventListener('click', function () { sincronizar(false); });
       $(id + 'Sync2').addEventListener('click', function () { sincronizar(false); });
+
+      /* filtro por almoxarifado */
+      $(id + 'FiltroAlm').addEventListener('change', function (ev) {
+        estado.filtroAlm = String(ev.target.value || '');
+        renderLista();
+      });
+
+      /* escolha do almoxarifado no registro */
+      qsa('#' + id + 'AlmOpts button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          estado.almNova = b.getAttribute('data-alm');
+          pintarAlmOpts();
+        });
+      });
       $(id + 'Enviar').addEventListener('click', enviarComponentesDaqui);
       $(id + 'ExportCsv').addEventListener('click', exportarCsv);
       $(id + 'Apagar').addEventListener('click', apagarLocal);

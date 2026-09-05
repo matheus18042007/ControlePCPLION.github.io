@@ -225,14 +225,14 @@ input:focus{border-color:var(--accent)}
 /* ---------- lista ---------- */
 .list{display:flex;flex-direction:column;gap:8px}
 .li{
-  display:flex;align-items:center;gap:12px;
+  display:flex;align-items:center;gap:12px;min-width:0;
   background:var(--card);border:1px solid var(--line);border-radius:12px;
   padding:12px 13px;text-align:left;width:100%;color:var(--txt);
 }
 .li:active{background:var(--card-2)}
 .li-main{flex:1;min-width:0}
 .li-code{font-size:11.5px;color:var(--accent-2);font-weight:700;letter-spacing:.4px}
-.li-nome{font-size:15px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li-nome{font-size:15px;margin-top:1px;line-height:1.25;overflow-wrap:anywhere;word-break:break-word}
 .li-sub{font-size:12px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .li-saldo{text-align:right;flex:none;min-width:74px}
 .li-saldo b{font-size:19px;display:block;line-height:1.1}
@@ -371,7 +371,7 @@ input:focus{border-color:var(--accent)}
 }
 /* cabeçalho das colunas, alinhado com .efic-linha */
 .efic-head,.efic-linha{
-  display:grid;grid-template-columns:1fr 116px 74px;
+  display:grid;grid-template-columns:minmax(0,1fr) 116px 74px;
   gap:8px;align-items:center;
 }
 .efic-head{
@@ -393,7 +393,7 @@ input:focus{border-color:var(--accent)}
 .efic-linha.gravando{opacity:.5}
 .efic-nome{
   font-size:14px;font-weight:600;line-height:1.25;
-  overflow:hidden;text-overflow:ellipsis;
+  min-width:0;overflow-wrap:anywhere;word-break:break-word;
 }
 .efic-sit,.efic-hora{
   background:var(--card-2);color:var(--txt);
@@ -426,12 +426,41 @@ input:focus{border-color:var(--accent)}
 /* ================= Faltas VG ================= */
 .falta-topo{margin-bottom:10px}
 .falta-li{border-left:3px solid var(--muted)}
-.falta-li.aberta{border-left-color:var(--danger)}
-.falta-li.produzindo{border-left-color:var(--warn)}
-.falta-li.transferencia{border-left-color:var(--accent)}
-.falta-li.sera{border-left-color:var(--ok)}
+.falta-li.aberta{border-left-color:var(--danger)}        /* sem previsao  - vermelho */
+.falta-li.produzindo{border-left-color:var(--warn)}      /* produzindo    - amarelo  */
+.falta-li.sera{border-left-color:var(--accent)}          /* sera produzido- laranja  */
+.falta-li.transferencia{border-left-color:var(--ok)}     /* em transfer.  - verde    */
 .falta-li{cursor:pointer}
-.falta-row{display:grid;grid-template-columns:1fr 152px;gap:8px;align-items:center}
+
+/* etiqueta do almoxarifado na linha */
+.falta-alm{
+  display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+  border:1px solid var(--line);color:var(--muted)
+}
+.falta-alm.frente{border-color:var(--accent);color:var(--accent-2)}
+.falta-alm.fundo{border-color:var(--ok);color:var(--ok)}
+
+/* barra de filtros: resumo na esquerda, acoes coladas na direita */
+.falta-filtros{display:flex;align-items:center;gap:8px}
+.falta-filtros .falta-espaco{flex:1}
+.falta-alm-filtro{
+  background:var(--card-2);color:var(--txt);
+  border:1px solid var(--line);border-radius:999px;
+  padding:6px 10px;font-size:13px
+}
+
+/* select de almoxarifado no registro */
+.falta-alm-opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:2px}
+.falta-alm-opts button{
+  background:var(--card-2);color:var(--muted);
+  border:1px solid var(--line);border-radius:10px;
+  padding:11px 8px;font-size:14px;font-weight:600;cursor:pointer
+}
+.falta-alm-opts button.on{
+  border-color:var(--accent);color:#fff;background:rgba(255,138,31,.15)
+}
+.falta-row{display:grid;grid-template-columns:minmax(0,1fr) 152px;gap:8px;align-items:center}
 .falta-sit{
   background:var(--card-2);color:var(--txt);
   border:1px solid var(--line);border-radius:9px;

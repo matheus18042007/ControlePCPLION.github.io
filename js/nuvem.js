@@ -570,7 +570,8 @@ var Nuvem = (function () {
           p_nome: falta.nome || '',
           p_qtd: Number(falta.qtd) || 0,
           p_usuario: usuario || null,
-          p_aparelho: aparelho()
+          p_aparelho: aparelho(),
+          p_almoxarifado: falta.almoxarifado || 'frente'
         }
       });
     }
