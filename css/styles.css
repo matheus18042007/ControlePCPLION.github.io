@@ -34,8 +34,10 @@
 }
 .login-box h2{margin:10px 0 2px;font-size:22px}
 .login .logo.lg{
-  width:64px;height:64px;font-size:24px;border-radius:16px;align-self:flex-start;
+  width:64px;height:64px;font-size:24px;border-radius:16px;align-self:center;
 }
+/* cabecalho do login centralizado; labels e campos seguem alinhados a esquerda */
+.login-box h2,.login-box>p{text-align:center;align-self:center}
 .login .lbl{margin-top:12px}
 .login .btn{margin-top:16px}
 .login-erro{
@@ -76,6 +78,10 @@ code{background:#0b0f14;padding:1px 5px;border-radius:5px;font-size:12px;color:v
   display:flex;align-items:center;justify-content:center;
   letter-spacing:.5px;
 }
+/* logo em imagem (leao) - sem o gradiente laranja do texto */
+.logo.img{background:none;object-fit:contain;padding:0}
+.login .logo.lg.img{width:88px;height:88px}
+
 /* logo da topbar quando esta mostrando o icone do modulo (mesmo visual do card do hub) */
 .logo.emoji{
   background:linear-gradient(135deg,rgba(255,138,31,.22),rgba(255,95,31,.10));

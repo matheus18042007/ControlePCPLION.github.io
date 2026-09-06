@@ -19,9 +19,9 @@ window.ModuloFaltas = (function () {
   /* status possíveis - a ordem aqui é a ordem do menu */
   var STATUS = [
     { cod: 'aberta',         label: 'Sem previsão',    cls: 'aberta' },
+    { cod: 'sera_produzido', label: 'Será produzido',  cls: 'sera' },
     { cod: 'produzindo',     label: 'Produzindo',      cls: 'produzindo' },
-    { cod: 'transferencia',  label: 'Em transferência', cls: 'transferencia' },
-    { cod: 'sera_produzido', label: 'Será produzido',  cls: 'sera' }
+    { cod: 'transferencia',  label: 'Em transferência', cls: 'transferencia' }    
   ];
 
   function labelStatus(cod) {
@@ -130,7 +130,7 @@ window.ModuloFaltas = (function () {
     var IDB = 'pcp_' + id;
 
     var db = null, saveTimer = null, montado = false, promessa = null;
-    var estado = { busca: '', apiNuvem: null, filtroAlm: '', almNova: '' };
+    var estado = { busca: '', apiNuvem: null, filtroAlm: '', filtroStatus: '', almNova: '' };
 
     /* almoxarifados do modulo */
     var ALMOX = [
@@ -254,6 +254,12 @@ window.ModuloFaltas = (function () {
         '      <option value="">Todos</option>',
         '      <option value="frente">Frente</option>',
         '      <option value="fundo">Fundo</option>',
+        '    </select>',
+        '    <select id="' + id + 'FiltroStatus" class="falta-alm-filtro" aria-label="Filtrar por situação">',
+        '      <option value="">Todas as situações</option>',
+        STATUS.map(function (s) {
+          return '      <option value="' + s.cod + '">' + s.label + '</option>';
+        }).join(''),
         '    </select>',
         '  </div>',
         '  <div id="' + id + 'Lista" class="list"></div>',
@@ -639,6 +645,9 @@ window.ModuloFaltas = (function () {
       if (estado.filtroAlm) {
         lista = lista.filter(function (f) { return normAlmox(f.almoxarifado) === estado.filtroAlm; });
       }
+      if (estado.filtroStatus) {
+        lista = lista.filter(function (f) { return normStatus(f.status) === estado.filtroStatus; });
+      }
       if (!q) return lista;
       return lista.filter(function (f) {
         return semAcento(f.codigo + ' ' + f.nome).toLowerCase().indexOf(q) >= 0;
@@ -650,9 +659,11 @@ window.ModuloFaltas = (function () {
       if (!el) return;
       var lista = faltasVisiveis();
 
+      renderResumo();
+
       if (!lista.length) {
         el.innerHTML = '<div class="vazio">' +
-          (estado.busca || estado.filtroAlm ? 'Nada encontrado.' : 'Nenhuma falta registrada.<br>Toque em "Registrar falta".') +
+          (estado.busca || estado.filtroAlm || estado.filtroStatus ? 'Nada encontrado.' : 'Nenhuma falta registrada.<br>Toque em "Registrar falta".') +
           '</div>';
         return;
       }
@@ -686,7 +697,10 @@ window.ModuloFaltas = (function () {
 
     function renderResumo() {
       var el = $(id + 'Resumo');
-      if (el) el.textContent = escalar('SELECT COUNT(*) FROM faltas');
+      /* com filtro/busca ativo conta o que está na tela */
+      if (el) el.textContent = (estado.busca || estado.filtroAlm || estado.filtroStatus)
+        ? faltasVisiveis().length
+        : escalar('SELECT COUNT(*) FROM faltas');
     }
 
     function renderStats() {
@@ -868,6 +882,12 @@ window.ModuloFaltas = (function () {
       /* filtro por almoxarifado */
       $(id + 'FiltroAlm').addEventListener('change', function (ev) {
         estado.filtroAlm = String(ev.target.value || '');
+        renderLista();
+      });
+
+      /* filtro por situação (sem previsão / produzindo / etc) */
+      $(id + 'FiltroStatus').addEventListener('change', function (ev) {
+        estado.filtroStatus = String(ev.target.value || '');
         renderLista();
       });
 
