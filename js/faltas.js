@@ -38,86 +38,10 @@ window.ModuloFaltas = (function () {
     return 'aberta';
   }
 
-  /* ---------------------------------------------------------
-     Camada de banco (IndexedDB + SQLite)
-
-     Repetida de propósito, como em js/eficiencia.js: cada módulo
-     abre o SEU banco e um não derruba o outro ao mudar schema.
-  --------------------------------------------------------- */
-  function idbOpen(nome) {
-    return new Promise(function (res, rej) {
-      var r = indexedDB.open(nome, 1);
-      r.onupgradeneeded = function () {
-        if (!r.result.objectStoreNames.contains('kv')) r.result.createObjectStore('kv');
-      };
-      r.onsuccess = function () { res(r.result); };
-      r.onerror = function () { rej(r.error); };
-    });
-  }
-  function idbSet(nome, key, val) {
-    return idbOpen(nome).then(function (d) {
-      return new Promise(function (res, rej) {
-        var tx = d.transaction('kv', 'readwrite');
-        tx.objectStore('kv').put(val, key);
-        tx.oncomplete = function () { d.close(); res(true); };
-        tx.onerror = function () { d.close(); rej(tx.error); };
-      });
-    });
-  }
-  function idbGet(nome, key) {
-    return idbOpen(nome).then(function (d) {
-      return new Promise(function (res, rej) {
-        var rq = d.transaction('kv', 'readonly').objectStore('kv').get(key);
-        rq.onsuccess = function () { d.close(); res(rq.result); };
-        rq.onerror = function () { d.close(); rej(rq.error); };
-      });
-    });
-  }
-
-  /* ---------- utilitários ---------- */
-  function semAcento(s) {
-    s = String(s == null ? '' : s);
-    return s.normalize ? s.normalize('NFD').replace(/[̀-ͯ]/g, '') : s;
-  }
-
-  /* id do registro: precisa ser único entre aparelhos offline */
-  function novoId() {
-    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
-    return 'F' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  }
-
-  function num(v) {
-    if (v === null || v === undefined || v === '') return 0;
-    var s = String(v).replace(/\s/g, '');
-    if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
-    var n = parseFloat(s);
-    return isNaN(n) ? 0 : n;
-  }
-
-  /* CSV simples (separador ; ou ,) - mesmo leitor do eficiencia */
-  function lerCsv(texto) {
-    var t = texto.replace(/^﻿/, '').replace(/\r\n?/g, '\n');
-    var linhas = t.split('\n').filter(function (l) { return l.trim() !== ''; });
-    if (!linhas.length) return { cabecalho: [], linhas: [] };
-    var sep = (linhas[0].split(';').length >= linhas[0].split(',').length) ? ';' : ',';
-    var parse = function (linha) {
-      var out = [], cur = '', aspas = false;
-      for (var i = 0; i < linha.length; i++) {
-        var c = linha[i];
-        if (aspas) {
-          if (c === '"' && linha[i + 1] === '"') { cur += '"'; i++; }
-          else if (c === '"') aspas = false;
-          else cur += c;
-        } else if (c === '"') aspas = true;
-        else if (c === sep) { out.push(cur); cur = ''; }
-        else cur += c;
-      }
-      out.push(cur);
-      return out.map(function (x) { return x.trim(); });
-    };
-    var cab = parse(linhas[0]).map(function (h) { return semAcento(h).toLowerCase(); });
-    return { cabecalho: cab, linhas: linhas.slice(1).map(parse) };
-  }
+  /* camada de banco compartilhada - ver js/base.js */
+  var idbOpen = window.PCPDB.open, idbSet = window.PCPDB.set, idbGet = window.PCPDB.get;
+  var semAcento = window.PCPDB.semAcento, novoId = window.PCPDB.novoId;
+  var num = window.PCPDB.num, lerCsv = window.PCPDB.lerCsv;
 
   /* =========================================================
      A instância do módulo
@@ -185,46 +109,17 @@ window.ModuloFaltas = (function () {
       }
     }
 
+    var K = window.PCPDB.kit({ idb: IDB, id: id, schema: SCHEMA });
+
     function abrirBanco() {
-      return initSqlJs({ locateFile: function (f) { return './vendor/' + f; } })
-        .then(function (SQL) {
-          return idbGet(IDB, 'dbfile').then(function (bytes) {
-            if (bytes) {
-              try { db = new SQL.Database(new Uint8Array(bytes)); }
-              catch (e) { db = new SQL.Database(); }
-            } else {
-              db = new SQL.Database();
-            }
-            db.run(SCHEMA);
-            migrarBanco();
-            juntarDuplicados();
-          });
-        });
+      return K.abrir().then(function () {
+        db = K.db;
+        migrarBanco();
+        juntarDuplicados();
+      });
     }
 
-    function salvar(imediato) {
-      if (!db) return;
-      clearTimeout(saveTimer);
-      var grava = function () {
-        idbSet(IDB, 'dbfile', db.export()).then(function () {
-          try { localStorage.setItem('ultimo_salvamento_' + id, P.agoraISO()); } catch (e) {}
-        });
-      };
-      if (imediato) grava(); else saveTimer = setTimeout(grava, 400);
-    }
-
-    function sel(sql, params) {
-      var r = [], st = db.prepare(sql);
-      if (params) st.bind(params);
-      while (st.step()) r.push(st.getAsObject());
-      st.free();
-      return r;
-    }
-    function um(sql, params) { var r = sel(sql, params); return r[0] || null; }
-    function escalar(sql, params) {
-      var r = um(sql, params);
-      return r ? r[Object.keys(r)[0]] : 0;
-    }
+    var salvar = K.salvar, sel = K.sel, um = K.um, escalar = K.escalar;
 
     /* =======================================================
        HTML do módulo
@@ -265,7 +160,16 @@ window.ModuloFaltas = (function () {
         '  <div id="' + id + 'Lista" class="list"></div>',
         '</section>',
 
-        /* ---------- ABA 2: CONFIGURAÇÕES ---------- */
+        /* ---------- ABA 2: HISTÓRICO (faltas supridas) ---------- */
+        '<section id="view-' + id + '-hist" class="view" data-modulo="' + id + '">',
+        '  <div class="falta-topo">',
+        '    <span class="muted small">Faltas já supridas — vem da nuvem.</span>',
+        '    <button id="' + id + 'HistAtualizar" class="pill" type="button">&#8635; Atualizar</button>',
+        '  </div>',
+        '  <div id="' + id + 'HistLista" class="list"></div>',
+        '</section>',
+
+        /* ---------- ABA 3: CONFIGURAÇÕES ---------- */
         '<section id="view-' + id + '-cfg" class="view" data-modulo="' + id + '">',
         '  <div class="card">',
         '    <h3>Notificações</h3>',
@@ -311,6 +215,7 @@ window.ModuloFaltas = (function () {
       nav.setAttribute('data-modulo', id);
       nav.innerHTML = [
         '<button class="tab active" data-view="' + id + '-lista" type="button"><span>&#9888;</span>Faltas</button>',
+        '<button class="tab" data-view="' + id + '-hist" type="button"><span>&#128337;</span>Histórico</button>',
         '<button class="tab" data-view="' + id + '-cfg" type="button"><span>&#9881;</span>Configurações</button>'
       ].join('');
       document.body.appendChild(nav);
@@ -624,6 +529,7 @@ window.ModuloFaltas = (function () {
     }
 
     function suprir(faltaId) {
+      estado.hist = null;   /* cache velho: a próxima abertura da aba rebusca */
       db.run('DELETE FROM faltas WHERE id = ?', [faltaId]);
       salvar();
       render();
@@ -802,6 +708,49 @@ window.ModuloFaltas = (function () {
       render();
     }
 
+    /* ---------- histórico: só nuvem, sob demanda ---------- */
+    function renderHistorico(recarregar) {
+      var el = $(id + 'HistLista');
+      if (!el) return;
+      var api = nv();
+      if (!api) {
+        el.innerHTML = '<div class="vazio">Sem nuvem: o histórico mora no servidor.</div>';
+        return;
+      }
+      if (estado.hist && !recarregar) { pintarHistorico(estado.hist); return; }
+      el.innerHTML = '<div class="vazio">Carregando…</div>';
+      api.puxarHistorico(300).then(function (lista) {
+        estado.hist = lista || [];
+        pintarHistorico(estado.hist);
+      }).catch(function (e) {
+        el.innerHTML = '<div class="vazio">Falhou ao buscar: ' + esc(e.message) + '</div>';
+      });
+    }
+
+    function pintarHistorico(lista) {
+      var el = $(id + 'HistLista');
+      if (!el) return;
+      if (!lista.length) {
+        el.innerHTML = '<div class="vazio">Nenhuma falta suprida ainda.</div>';
+        return;
+      }
+      el.innerHTML = lista.map(function (f) {
+        return '<div class="li falta-li">' +
+          '<div class="falta-row">' +
+            '<div class="li-main">' +
+              '<div class="li-code">' + esc(f.codigo) + '</div>' +
+              '<div class="li-nome">' + esc(f.nome || '(sem nome na base)') +
+                ' <span class="falta-alm">' + esc(labelAlmox(normAlmox(f.almoxarifado))) + '</span></div>' +
+              '<div class="li-sub">Falta ' + P.fmtNum(f.qtd) + ' · ' +
+                esc(f.criado_por || '-') + ' · ' + esc(P.fmtDataHora(f.criado_em)) + '</div>' +
+              '<div class="li-sub li-sup-ok">Suprida ' + esc(P.fmtDataHora(f.suprida_em)) +
+                (f.suprida_por ? ' · ' + esc(f.suprida_por) : '') + '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
     /* =======================================================
        EVENTOS
     ======================================================= */
@@ -825,6 +774,9 @@ window.ModuloFaltas = (function () {
         estado.busca = '';
         renderLista();
       });
+
+      /* histórico */
+      $(id + 'HistAtualizar').addEventListener('click', function () { renderHistorico(true); });
 
       /* registro */
       $(id + 'Nova').addEventListener('click', abrirNova);
@@ -946,6 +898,7 @@ window.ModuloFaltas = (function () {
       aoMostrarView: function (nome) {
         if (!montado) return;
         if (nome === id + '-lista') { renderLista(); renderResumo(); }
+        else if (nome === id + '-hist') { renderHistorico(false); }
         else if (nome === id + '-cfg') { renderStats(); statusNuvem(); }
       },
       fecharSheets: function () { if (montado) fecharSheets(); }

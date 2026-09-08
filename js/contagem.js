@@ -25,73 +25,11 @@ window.ModuloContagem = (function () {
 
   var instancias = {};
 
-  /* ---------- IndexedDB próprio de cada módulo ---------- */
-  function idbOpen(nome) {
-    return new Promise(function (res, rej) {
-      var r = indexedDB.open(nome, 1);
-      r.onupgradeneeded = function () {
-        if (!r.result.objectStoreNames.contains('kv')) r.result.createObjectStore('kv');
-      };
-      r.onsuccess = function () { res(r.result); };
-      r.onerror = function () { rej(r.error); };
-    });
-  }
-  function idbSet(nome, key, val) {
-    return idbOpen(nome).then(function (d) {
-      return new Promise(function (res, rej) {
-        var tx = d.transaction('kv', 'readwrite');
-        tx.objectStore('kv').put(val, key);
-        tx.oncomplete = function () { d.close(); res(true); };
-        tx.onerror = function () { d.close(); rej(tx.error); };
-      });
-    });
-  }
-  function idbGet(nome, key) {
-    return idbOpen(nome).then(function (d) {
-      return new Promise(function (res, rej) {
-        var tx = d.transaction('kv', 'readonly');
-        var rq = tx.objectStore('kv').get(key);
-        rq.onsuccess = function () { d.close(); res(rq.result); };
-        rq.onerror = function () { d.close(); rej(rq.error); };
-      });
-    });
-  }
+  /* camada compartilhada - ver js/base.js */
+  var idbOpen = window.PCPDB.open, idbSet = window.PCPDB.set, idbGet = window.PCPDB.get;
+  var num = window.PCPDB.num, lerCsv = window.PCPDB.lerCsv;
 
-  /* ---------- CSV bem simples (separador ; ou ,) ---------- */
-  function lerCsv(texto) {
-    var t = texto.replace(/^﻿/, '').replace(/\r\n?/g, '\n');
-    var linhas = t.split('\n').filter(function (l) { return l.trim() !== ''; });
-    if (!linhas.length) return { cabecalho: [], linhas: [] };
-    var sep = (linhas[0].split(';').length >= linhas[0].split(',').length) ? ';' : ',';
-    var parse = function (linha) {
-      var out = [], cur = '', aspas = false;
-      for (var i = 0; i < linha.length; i++) {
-        var c = linha[i];
-        if (aspas) {
-          if (c === '"' && linha[i + 1] === '"') { cur += '"'; i++; }
-          else if (c === '"') aspas = false;
-          else cur += c;
-        } else if (c === '"') aspas = true;
-        else if (c === sep) { out.push(cur); cur = ''; }
-        else cur += c;
-      }
-      out.push(cur);
-      return out.map(function (x) { return x.trim(); });
-    };
-    var cab = parse(linhas[0]).map(function (h) {
-      var s = h.toLowerCase();
-      /* tira acentos para aceitar "descrição", "código" etc. */
-      return s.normalize ? s.normalize('NFD').replace(/[̀-ͯ]/g, '') : s;
-    });
-    return { cabecalho: cab, linhas: linhas.slice(1).map(parse) };
-  }
 
-  function num(v) {
-    if (v == null || v === '') return 0;
-    var s = String(v).replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
-    var n = parseFloat(s);
-    return isNaN(n) ? 0 : n;
-  }
 
   /* =======================================================
      Uma instância = um módulo de contagem
@@ -133,47 +71,12 @@ window.ModuloContagem = (function () {
       'CREATE INDEX IF NOT EXISTS ix_' + id + '_mov_data ON ' + MOV + '(data_hora);'
     ].join('\n');
 
-    /* ---------- banco ---------- */
-    function abrirBanco() {
-      return initSqlJs({ locateFile: function (f) { return './vendor/' + f; } })
-        .then(function (SQL) {
-          return idbGet(IDB, 'dbfile').then(function (bytes) {
-            if (bytes && bytes.byteLength) {
-              try { db = new SQL.Database(new Uint8Array(bytes)); }
-              catch (e) { db = new SQL.Database(); }
-            } else {
-              db = new SQL.Database();
-            }
-            db.run(SCHEMA);
-          });
-        });
-    }
+    /* ---------- banco (kit compartilhado) ---------- */
+    var K = window.PCPDB.kit({ idb: IDB, id: id, schema: SCHEMA });
 
-    function salvar(imediato) {
-      clearTimeout(saveTimer);
-      var run = function () {
-        try {
-          idbSet(IDB, 'dbfile', db.export()).then(function () {
-            localStorage.setItem('ultimo_salvamento_' + id, P.agoraISO());
-          });
-        } catch (e) { toast('Erro ao salvar: ' + e.message, 'err'); }
-      };
-      if (imediato) run(); else saveTimer = setTimeout(run, 400);
-    }
+    function abrirBanco() { return K.abrir().then(function () { db = K.db; }); }
 
-    function sel(sql, params) {
-      var out = [], st = db.prepare(sql);
-      if (params) st.bind(params);
-      while (st.step()) out.push(st.getAsObject());
-      st.free();
-      return out;
-    }
-    function um(sql, params) { var r = sel(sql, params); return r.length ? r[0] : null; }
-    function escalar(sql, params) {
-      var r = um(sql, params);
-      if (!r) return 0;
-      return r[Object.keys(r)[0]];
-    }
+    var salvar = K.salvar, sel = K.sel, um = K.um, escalar = K.escalar;
 
     /* ---------------------------------------------------
        NUVEM (Supabase)

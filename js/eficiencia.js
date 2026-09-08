@@ -40,35 +40,9 @@ window.ModuloEficiencia = (function () {
      de propósito: cada módulo abre o SEU banco e um não pode
      derrubar o outro se precisar mudar de schema.
   --------------------------------------------------------- */
-  function idbOpen(nome) {
-    return new Promise(function (res, rej) {
-      var r = indexedDB.open(nome, 1);
-      r.onupgradeneeded = function () {
-        if (!r.result.objectStoreNames.contains('kv')) r.result.createObjectStore('kv');
-      };
-      r.onsuccess = function () { res(r.result); };
-      r.onerror = function () { rej(r.error); };
-    });
-  }
-  function idbSet(nome, key, val) {
-    return idbOpen(nome).then(function (d) {
-      return new Promise(function (res, rej) {
-        var tx = d.transaction('kv', 'readwrite');
-        tx.objectStore('kv').put(val, key);
-        tx.oncomplete = function () { d.close(); res(true); };
-        tx.onerror = function () { d.close(); rej(tx.error); };
-      });
-    });
-  }
-  function idbGet(nome, key) {
-    return idbOpen(nome).then(function (d) {
-      return new Promise(function (res, rej) {
-        var rq = d.transaction('kv', 'readonly').objectStore('kv').get(key);
-        rq.onsuccess = function () { d.close(); res(rq.result); };
-        rq.onerror = function () { d.close(); rej(rq.error); };
-      });
-    });
-  }
+  /* camada compartilhada - ver js/base.js */
+  var idbOpen = window.PCPDB.open, idbSet = window.PCPDB.set, idbGet = window.PCPDB.get;
+  var semAcento = window.PCPDB.semAcento, num = window.PCPDB.num, lerCsv = window.PCPDB.lerCsv;
 
   /* ---------- datas (YYYY-MM-DD, sem fuso para atrapalhar) ---------- */
   function hoje() {
@@ -91,10 +65,6 @@ window.ModuloEficiencia = (function () {
   /* id estável do colaborador: mesmo setor + mesmo nome = mesma
      pessoa em qualquer aparelho, o que faz o merge na nuvem
      funcionar sem depender de sequência local */
-  function semAcento(s) {
-    s = String(s == null ? '' : s);
-    return s.normalize ? s.normalize('NFD').replace(/[̀-ͯ]/g, '') : s;
-  }
   function chave(setor, nome) {
     var slug = function (s) {
       return semAcento(s).trim().toUpperCase()
@@ -103,41 +73,10 @@ window.ModuloEficiencia = (function () {
     return slug(setor) + ':' + slug(nome);
   }
 
-  /* ---------- CSV bem simples (separador ; ou ,) ---------- */
-  function lerCsv(texto) {
-    var t = texto.replace(/^﻿/, '').replace(/\r\n?/g, '\n');
-    var linhas = t.split('\n').filter(function (l) { return l.trim() !== ''; });
-    if (!linhas.length) return { cabecalho: [], linhas: [] };
-    var sep = (linhas[0].split(';').length >= linhas[0].split(',').length) ? ';' : ',';
-    var parse = function (linha) {
-      var out = [], cur = '', aspas = false;
-      for (var i = 0; i < linha.length; i++) {
-        var c = linha[i];
-        if (aspas) {
-          if (c === '"' && linha[i + 1] === '"') { cur += '"'; i++; }
-          else if (c === '"') aspas = false;
-          else cur += c;
-        } else if (c === '"') aspas = true;
-        else if (c === sep) { out.push(cur); cur = ''; }
-        else cur += c;
-      }
-      out.push(cur);
-      return out.map(function (x) { return x.trim(); });
-    };
-    var cab = parse(linhas[0]).map(function (h) { return semAcento(h).toLowerCase(); });
-    return { cabecalho: cab, linhas: linhas.slice(1).map(parse) };
-  }
 
   /* horas: aceita 1.5 (input number) e 1,5 (digitado a mao).
      So trata o ponto como separador de milhar quando existe
      uma virgula decimal na frente - senao 1.5 viraria 15. */
-  function num(v) {
-    if (v === null || v === undefined || v === '') return 0;
-    var s = String(v).replace(/\s/g, '');
-    if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
-    var n = parseFloat(s);
-    return isNaN(n) ? 0 : n;
-  }
 
   /* normaliza o que o usuário digitar na situação para I / P / '' */
   function normSituacao(v) {
@@ -199,49 +138,14 @@ window.ModuloEficiencia = (function () {
       });
     }
 
-    /* ---------- banco ---------- */
+    /* ---------- banco (kit compartilhado) ---------- */
+    var K = window.PCPDB.kit({ idb: IDB, id: id, schema: SCHEMA, aoSalvar: null });
+
     function abrirBanco() {
-      return initSqlJs({ locateFile: function (f) { return './vendor/' + f; } })
-        .then(function (SQL) {
-          return idbGet(IDB, 'dbfile').then(function (bytes) {
-            if (bytes && bytes.byteLength) {
-              try { db = new SQL.Database(new Uint8Array(bytes)); }
-              catch (e) { db = new SQL.Database(); }
-            } else {
-              db = new SQL.Database();
-            }
-            db.run(SCHEMA);
-            migrarOrdem();
-          });
-        });
+      return K.abrir().then(function () { db = K.db; migrarOrdem(); });
     }
 
-    function salvar(imediato) {
-      clearTimeout(saveTimer);
-      var run = function () {
-        try {
-          idbSet(IDB, 'dbfile', db.export()).then(function () {
-            localStorage.setItem('ultimo_salvamento_' + id, P.agoraISO());
-          });
-        } catch (e) { toast('Erro ao salvar: ' + e.message, 'err'); }
-      };
-      if (imediato) run(); else saveTimer = setTimeout(run, 400);
-    }
-
-    /* ---------- consultas ---------- */
-    function sel(sql, params) {
-      var out = [], st = db.prepare(sql);
-      if (params) st.bind(params);
-      while (st.step()) out.push(st.getAsObject());
-      st.free();
-      return out;
-    }
-    function um(sql, params) { var r = sel(sql, params); return r.length ? r[0] : null; }
-    function escalar(sql, params) {
-      var r = um(sql, params);
-      if (!r) return 0;
-      return r[Object.keys(r)[0]];
-    }
+    var salvar = K.salvar, sel = K.sel, um = K.um, escalar = K.escalar;
 
     /* =======================================================
        HTML do módulo

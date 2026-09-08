@@ -548,6 +548,12 @@ var Nuvem = (function () {
         5000, aoProgredir);
     }
 
+    /* o que ja foi suprido - so sob demanda, para a aba de historico */
+    function puxarHistorico(limite) {
+      return req('/faltas?select=*&modulo=eq.' + m +
+        '&suprida_em=not.is.null&order=suprida_em.desc&limit=' + (limite || 300));
+    }
+
     function puxarTudo(aoProgredir) {
       var nC = 0, nF = 0;
       var passo = aoProgredir ? function () { aoProgredir(nC, nF); } : null;
@@ -643,6 +649,7 @@ var Nuvem = (function () {
       puxarTudo: puxarTudo,
       puxarComponentes: puxarComponentes,
       puxarFaltas: puxarFaltas,
+      puxarHistorico: puxarHistorico,
       registrar: registrar,
       status: status,
       suprir: suprir,

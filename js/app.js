@@ -5,7 +5,7 @@
 (function () {
 'use strict';
 
-var APP_VERSION = '1.22.2';
+var APP_VERSION = '1.23.1';
 
 /* ---------------------------------------------------------
    Atalhos DOM
@@ -68,6 +68,16 @@ function agoraISO() {
 }
 function fmtDataHora(s) {
   if (!s) return '';
+  /* carimbo do Postgres vem em UTC (…Z ou …+00) - converte para a hora daqui.
+     O que o app grava (agoraISO) nao tem fuso: ja e hora local, mostra como esta. */
+  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(String(s).trim())) {
+    var d = new Date(s);
+    if (!isNaN(d)) {
+      var p = function (x) { return String(x).padStart(2, '0'); };
+      return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' +
+             p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+  }
   var m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(s);
   return m ? (m[3] + '/' + m[2] + '/' + m[1] + ' ' + m[4] + ':' + m[5]) : s;
 }
@@ -76,36 +86,10 @@ function fmtDataHora(s) {
    IndexedDB (armazena o arquivo .db em bytes)
 --------------------------------------------------------- */
 var IDB_NAME = 'almox_pba', IDB_STORE = 'kv';
-function idbOpen() {
-  return new Promise(function (res, rej) {
-    var r = indexedDB.open(IDB_NAME, 1);
-    r.onupgradeneeded = function () {
-      if (!r.result.objectStoreNames.contains(IDB_STORE)) r.result.createObjectStore(IDB_STORE);
-    };
-    r.onsuccess = function () { res(r.result); };
-    r.onerror = function () { rej(r.error); };
-  });
-}
-function idbSet(key, val) {
-  return idbOpen().then(function (db) {
-    return new Promise(function (res, rej) {
-      var tx = db.transaction(IDB_STORE, 'readwrite');
-      tx.objectStore(IDB_STORE).put(val, key);
-      tx.oncomplete = function () { db.close(); res(true); };
-      tx.onerror = function () { db.close(); rej(tx.error); };
-    });
-  });
-}
-function idbGet(key) {
-  return idbOpen().then(function (db) {
-    return new Promise(function (res, rej) {
-      var tx = db.transaction(IDB_STORE, 'readonly');
-      var rq = tx.objectStore(IDB_STORE).get(key);
-      rq.onsuccess = function () { db.close(); res(rq.result); };
-      rq.onerror = function () { db.close(); rej(rq.error); };
-    });
-  });
-}
+/* wrappers finos sobre js/base.js (mesma assinatura de antes) */
+function idbOpen() { return window.PCPDB.open(IDB_NAME); }
+function idbSet(key, val) { return window.PCPDB.set(IDB_NAME, key, val); }
+function idbGet(key) { return window.PCPDB.get(IDB_NAME, key); }
 
 /* ---------------------------------------------------------
    Banco SQLite
@@ -135,54 +119,15 @@ var SCHEMA = [
   'CREATE INDEX IF NOT EXISTS ix_mov_data ON movimentacoes(data_hora);'
 ].join('\n');
 
-function iniciarSQL() {
-  return initSqlJs({ locateFile: function (f) { return './vendor/' + f; } })
-    .then(function (sql) {
-      SQL = sql;
-      return idbGet('dbfile');
-    })
-    .then(function (bytes) {
-      if (bytes && bytes.byteLength) {
-        try { db = new SQL.Database(new Uint8Array(bytes)); }
-        catch (e) { db = new SQL.Database(); }
-      } else {
-        db = new SQL.Database();
-      }
-      db.run(SCHEMA);
-    });
-}
+var K = window.PCPDB.kit({ idb: IDB_NAME, schema: SCHEMA, aoSalvar: function () { atualizarStats(); } });
+
+function iniciarSQL() { return K.abrir().then(function () { db = K.db; }); }
 
 /* Salva o banco no IndexedDB (com debounce) */
-function salvar(imediato) {
-  clearTimeout(saveTimer);
-  var run = function () {
-    try {
-      var bytes = db.export();
-      idbSet('dbfile', bytes).then(function () {
-        localStorage.setItem('ultimo_salvamento', agoraISO());
-        atualizarStats();
-      });
-    } catch (e) { toast('Erro ao salvar: ' + e.message, 'err'); }
-  };
-  if (imediato) run(); else saveTimer = setTimeout(run, 400);
-}
+var salvar = K.salvar;
 
 /* Consulta -> array de objetos */
-function sel(sql, params) {
-  var out = [];
-  var st = db.prepare(sql);
-  if (params) st.bind(params);
-  while (st.step()) out.push(st.getAsObject());
-  st.free();
-  return out;
-}
-function um(sql, params) { var r = sel(sql, params); return r.length ? r[0] : null; }
-function escalar(sql, params) {
-  var r = um(sql, params);
-  if (!r) return 0;
-  var k = Object.keys(r)[0];
-  return r[k];
-}
+var sel = K.sel, um = K.um, escalar = K.escalar;
 
 /* ---------------------------------------------------------
    SINCRONIZAÇÃO COM A NUVEM (Supabase)
@@ -1139,11 +1084,11 @@ function exportarMovCSV() {
 }
 function importarDB(buffer) {
   try {
-    var novo = new SQL.Database(new Uint8Array(buffer));
+    var novo = new K.SQL.Database(new Uint8Array(buffer));
     novo.run(SCHEMA);
     novo.exec('SELECT COUNT(*) FROM itens');
     db.close();
-    db = novo;
+    db = K.db = novo;
     salvar(true);
     toast('Banco importado com sucesso', 'ok');
     mostrarView('estoque');

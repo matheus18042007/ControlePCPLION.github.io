@@ -1,12 +1,12 @@
-# Graph Report - App Pcp lion fitness  (2026-09-08)
+# Graph Report - App Pcp lion fitness  (2026-09-05)
 
 ## Corpus Check
-- 16 files · ~53,037 words
+- 24 files · ~107,314 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1696 nodes · 4408 edges · 90 communities (26 shown, 58 thin omitted)
-- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 93 edges (avg confidence: 0.85)
+- 1719 nodes · 4555 edges · 93 communities (27 shown, 58 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 92 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
@@ -23,7 +23,6 @@
 - PBA Maskable App Icon (512px, superseded)
 - Auth.admin.removerUsuario (definida em js/auth.js)
 - PBA Branding Mark
-- base.js
 - Apple Touch Icon (PCP Lion, 180px)
 - PWA Icon 192x192 (PCP Lion Logo)
 - Maskable Adaptive Icon (512x512)
@@ -37,8 +36,7 @@
 - N
 - sr
 - ke
-- .getCount
-- Vr
+- gr
 - .append
 - c
 - be
@@ -47,65 +45,68 @@
 - fr
 - cr
 - .toString
-- .decode
+- ve
 - .getX
 - j
 - me
 - p
 - ie
-- .charAt
+- w
 - je
 - x
-- re
+- wt
 - et
-- at
 - .getSize
+- .encode
 - .parseInformation
 - .substring
 - T
-- w
+- ct
 - fe
 - ot
 - e
-- ar
 - .decode
+- ae
 - ce
 - _
-- r
 - mb
+- ge
 - it
-- ae
+- .decode
 - .encode
 - m
 - O
 - I
-- ct
+- .charAt
 - lt
-- ge
+- .setHints
 - push.js
-- .getStartColumn
-- gr
+- .decode
+- ft
+- le
 - a
 - index.ts
+- r
+- BANCO DE DADOS MC PBA_3fd48885.md
 - Va
 - nt
 - ma
 - Nr
-- Qe
+- pe
 - rr
-- .encode
+- oe
 
 ## God Nodes (most connected - your core abstractions)
 1. `_` - 110 edges
 2. `f` - 64 edges
 3. `c` - 50 edges
-4. `criarInstancia()` - 41 edges
+4. `criarInstancia()` - 45 edges
 5. `p` - 41 edges
-6. `sr` - 37 edges
-7. `N` - 36 edges
-8. `criarInstancia()` - 35 edges
-9. `criarInstancia()` - 35 edges
-10. `it` - 35 edges
+6. `criarInstancia()` - 39 edges
+7. `criarInstancia()` - 37 edges
+8. `sr` - 37 edges
+9. `N` - 36 edges
+10. `ligarEventos()` - 35 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `nuvemDot — indicador visual da situação da conexão com a nuvem` --semantically_similar_to--> `Sincronização em nuvem via Supabase (estoque compartilhado)`  [INFERRED] [semantically similar]
@@ -116,8 +117,8 @@
   index.html → README.md
 - `View Dados — CSV, nuvem, cadastro manual, excluir item, exportar/importar .db` --semantically_similar_to--> `Importação de itens via CSV (codigo;nome;descricao;unidade_medida;estoque_atual;estoque_minimo)`  [INFERRED] [semantically similar]
   index.html → README.md
-- `index.html — Controle PCP LION (app principal)` --references--> `js/app.js — banco SQLite, telas, scanner, import/export`  [EXTRACTED]
-  index.html → README.md
+- `Senha do banco de dados PBA (nota)` --conceptually_related_to--> `Sincronização em nuvem via Supabase (estoque compartilhado)`  [AMBIGUOUS]
+  BD/banco de dados PBA.txt → README.md
 
 ## Import Cycles
 - None detected.
@@ -127,27 +128,27 @@
 - **Bundle de scripts carregados pelo index.html (runtime do Almoxarifado PBA + módulos)** — index, js_app_js_module, js_nuvem_js_module, js_auth_js_module, js_usuarios_js_module, js_contagem_js_module, js_eficiencia_js_module, vendor_sql_wasm_module, vendor_html5_qrcode_module [EXTRACTED 1.00]
 - **Esquema de criptografia do cofre (AES-GCM + PBKDF2)** — readme_cofre_vault, readme_aes_gcm_encryption, readme_pbkdf2_derivation, js_usuarios_js_module [EXTRACTED 1.00]
 
-## Communities (90 total, 58 thin omitted)
+## Communities (93 total, 58 thin omitted)
 
 ### Community 0 - "app.js"
 Cohesion: 0.10
-Nodes (62): abrirCadastro(), abrirItem(), abrirModulo(), abrirMov(), acharCol(), agoraISO(), aoLerQR(), atualizarPrevia() (+54 more)
+Nodes (70): abrirCadastro(), abrirItem(), abrirModulo(), abrirMov(), acharCol(), agoraISO(), aoLerQR(), atualizarPrevia() (+62 more)
 
 ### Community 1 - "criarInstancia"
-Cohesion: 0.14
-Nodes (40): chave(), criarInstancia(), abrirBanco(), abrirCadastro(), apagarTudo(), aplicarLocal(), atualizarLinha(), enviarDaqui() (+32 more)
+Cohesion: 0.13
+Nodes (50): chave(), criarInstancia(), abrirBanco(), abrirCadastro(), apagarTudo(), aplicarLocal(), atualizarLinha(), enviarDaqui() (+42 more)
 
 ### Community 2 - "index.html — Controle PCP LION (app principal)"
 Cohesion: 0.06
-Nodes (51): admin.html — Cadastro de usuários (página), Auth.admin.abrir (definida em js/auth.js), Auth.admin.addUsuario (definida em js/auth.js), Auth.admin.criar (definida em js/auth.js), Auth.admin.serializar (definida em js/auth.js), Auth.admin.trocarNuvem (definida em js/auth.js), btnAbrir click handler — destrava cofre existente, btnAddUser click handler — salva/atualiza usuário (+43 more)
+Nodes (52): admin.html — Cadastro de usuários (página), Auth.admin.abrir (definida em js/auth.js), Auth.admin.addUsuario (definida em js/auth.js), Auth.admin.criar (definida em js/auth.js), Auth.admin.serializar (definida em js/auth.js), Auth.admin.trocarNuvem (definida em js/auth.js), btnAbrir click handler — destrava cofre existente, btnAddUser click handler — salva/atualiza usuário (+44 more)
 
 ### Community 3 - "req"
 Cohesion: 0.08
-Nodes (50): aparelho(), ativa(), cadastrarItem(), carregar(), contagem(), apagarFoto(), cadastrar(), definir() (+42 more)
+Nodes (49): aparelho(), ativa(), cadastrarItem(), carregar(), contagem(), apagarFoto(), cadastrar(), definir() (+41 more)
 
 ### Community 4 - "criarInstancia"
-Cohesion: 0.15
-Nodes (40): criarInstancia(), abrirCadastro(), abrirQtd(), abrirVisor(), ainda(), apagarFotoDoItem(), apagarTudo(), aplicarLocal() (+32 more)
+Cohesion: 0.14
+Nodes (50): criarInstancia(), abrirBanco(), abrirCadastro(), abrirQtd(), abrirVisor(), ainda(), apagarFotoDoItem(), apagarTudo() (+42 more)
 
 ### Community 5 - "auth.js"
 Cohesion: 0.19
@@ -159,7 +160,7 @@ Nodes (18): background_color, categories, description, dir, display, icons, id, 
 
 ### Community 7 - "ee"
 Cohesion: 0.06
-Nodes (4): bt, ee, ne, rt
+Nodes (5): bt, ee, ne, re, rt
 
 ### Community 8 - "PCP Lion PWA Icon (512x512)"
 Cohesion: 0.40
@@ -173,13 +174,9 @@ Nodes (4): PBA Legacy App Icon (512x512), Lion Logo App Icon (successor, pcplion
 Cohesion: 0.50
 Nodes (4): PBA Maskable App Icon (512px, superseded), Android Adaptive Icon Maskable Safe Zone, PBA Brand Mark / Wordmark, QR-Code Finder Pattern Motif
 
-### Community 13 - "base.js"
-Cohesion: 0.20
-Nodes (7): idbGet(), idbOpen(), idbSet(), kit(), k, lerCsv(), semAcento()
-
 ### Community 19 - "c"
-Cohesion: 0.06
-Nodes (8): c, dr, he, K, Q, tt, xe, Z
+Cohesion: 0.07
+Nodes (7): c, dr, K, Q, tt, xe, Z
 
 ### Community 20 - "f"
 Cohesion: 0.06
@@ -190,32 +187,40 @@ Cohesion: 0.12
 Nodes (34): ab(), ac(), b(), bb(), bc(), cb(), cc(), createNode() (+26 more)
 
 ### Community 25 - "criarInstancia"
+Cohesion: 0.13
+Nodes (47): clsStatus(), criarInstancia(), abrirBanco(), abrirNova(), acharFalta(), adicionarFalta(), aoDigitarCodigo(), apagarLocal() (+39 more)
+
+### Community 30 - "gr"
 Cohesion: 0.15
-Nodes (38): clsStatus(), criarInstancia(), abrirBanco(), abrirNova(), acharFalta(), adicionarFalta(), aoDigitarCodigo(), apagarLocal() (+30 more)
+Nodes (3): br(), gr, Vr
+
+### Community 31 - ".append"
+Cohesion: 0.15
+Nodes (3): he, te, ue
 
 ### Community 32 - "c"
 Cohesion: 0.15
 Nodes (5): a(), c(), oa(), Qa(), sb()
 
-### Community 38 - ".toString"
-Cohesion: 0.12
-Nodes (3): er, ir(), tr
+### Community 41 - "j"
+Cohesion: 0.11
+Nodes (3): ar, d, j
 
-### Community 47 - "x"
-Cohesion: 0.10
-Nodes (3): mt, wt, x
+### Community 48 - "wt"
+Cohesion: 0.17
+Nodes (3): mt, wt, yt
 
 ### Community 53 - ".parseInformation"
-Cohesion: 0.12
-Nodes (5): jt, Qt, vt, xt, yt
+Cohesion: 0.11
+Nodes (5): jt, Qt, vt, xt, zt
 
 ### Community 66 - "mb"
 Cohesion: 0.20
 Nodes (7): d(), ha(), lc(), mb(), readlink(), symlink(), Zb()
 
-### Community 76 - "ge"
-Cohesion: 0.19
-Nodes (4): constructor(), ge, gt, lr
+### Community 76 - ".setHints"
+Cohesion: 0.31
+Nodes (3): constructor(), gt, lr
 
 ### Community 77 - "push.js"
 Cohesion: 0.54
@@ -233,25 +238,29 @@ Nodes (6): close(), fc(), fsync(), na(), read(), Va()
 Cohesion: 0.40
 Nodes (5): ec(), jb(), ma(), Ta(), write()
 
+## Ambiguous Edges - Review These
+- `Sincronização em nuvem via Supabase (estoque compartilhado)` → `Senha do banco de dados PBA (nota)`  [AMBIGUOUS]
+  BD/banco de dados PBA.txt · relation: conceptually_related_to
+
 ## Knowledge Gaps
-- **51 isolated node(s):** `name`, `short_name`, `description`, `id`, `start_url` (+46 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 337 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **54 isolated node(s):** `name`, `short_name`, `description`, `id`, `start_url` (+49 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 335 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **58 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `_` connect `_` to `ee`, `c`, `f`, `b`, `ht`, `y`, `N`, `sr`, `ke`, `.getCount`, `Vr`, `.append`, `be`, `.get`, `ze`, `fr`, `cr`, `.toString`, `.decode`, `.getX`, `j`, `me`, `p`, `ie`, `.charAt`, `je`, `x`, `re`, `et`, `at`, `.getSize`, `.parseInformation`, `.substring`, `T`, `w`, `fe`, `ot`, `ar`, `.decode`, `ce`, `r`, `it`, `ae`, `.encode`, `m`, `O`, `I`, `ct`, `lt`, `ge`, `.getStartColumn`, `gr`, `nt`, `Nr`, `Qe`, `rr`, `.encode`?**
-  _High betweenness centrality (0.379) - this node is a cross-community bridge._
+- **What is the exact relationship between `Sincronização em nuvem via Supabase (estoque compartilhado)` and `Senha do banco de dados PBA (nota)`?**
+  _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
+- **Why does `_` connect `_` to `ee`, `c`, `f`, `b`, `ht`, `y`, `N`, `sr`, `ke`, `gr`, `.append`, `be`, `.get`, `ze`, `fr`, `cr`, `.toString`, `ve`, `.getX`, `j`, `me`, `p`, `ie`, `w`, `je`, `x`, `wt`, `et`, `.getSize`, `.encode`, `.parseInformation`, `.substring`, `T`, `ct`, `fe`, `ot`, `.decode`, `ae`, `ce`, `ge`, `it`, `.decode`, `.encode`, `m`, `O`, `I`, `.charAt`, `lt`, `.setHints`, `.decode`, `ft`, `le`, `r`, `nt`, `Nr`, `pe`, `rr`, `oe`?**
+  _High betweenness centrality (0.366) - this node is a cross-community bridge._
 - **Why does `R()` connect `sql-wasm.js` to `a`, `Va`, `ma`, `x`?**
-  _High betweenness centrality (0.067) - this node is a cross-community bridge._
+  _High betweenness centrality (0.064) - this node is a cross-community bridge._
 - **Why does `f` connect `f` to `_`, `w`, `.toString`?**
-  _High betweenness centrality (0.053) - this node is a cross-community bridge._
+  _High betweenness centrality (0.046) - this node is a cross-community bridge._
 - **What connects `name`, `short_name`, `description` to the rest of the system?**
-  _51 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _54 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `app.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.09920983318700614 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.10211267605633803 - nodes in this community are weakly interconnected._
 - **Should `criarInstancia` be split into smaller, more focused modules?**
-  _Cohesion score 0.14268292682926828 - nodes in this community are weakly interconnected._
-- **Should `index.html — Controle PCP LION (app principal)` be split into smaller, more focused modules?**
-  _Cohesion score 0.05803921568627451 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.12941176470588237 - nodes in this community are weakly interconnected._

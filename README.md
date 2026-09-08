@@ -4,7 +4,7 @@ PWA (app instalável) de controle de chão de fábrica. Roda 100% no navegador �
 HTML + CSS + JavaScript puro, sem framework, sem build. Funciona offline e
 sincroniza com o Supabase quando tem internet.
 
-Versão atual: **1.20.0** (`APP_VERSION` em `js/app.js`, `CACHE_VERSION` em `sw.js`).
+Versão atual: **1.23.1** (`APP_VERSION` em `js/app.js`, `CACHE_VERSION` em `sw.js`).
 
 ---
 

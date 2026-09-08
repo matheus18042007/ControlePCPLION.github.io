@@ -479,3 +479,6 @@ input:focus{border-color:var(--accent)}
   margin-top:10px;padding-top:10px;border-top:1px solid var(--line);
   font-size:13px;cursor:pointer
 }
+
+/* histórico de faltas: a linha "Suprida ..." é a boa notícia */
+.li-sub.li-sup-ok{color:var(--ok)}
