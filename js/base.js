@@ -48,6 +48,17 @@ window.PCPDB = (function () {
       });
     });
   }
+  /* lista todas as chaves do kv (usado pelo backup: fotos, etc) */
+  function idbKeys(nome) {
+    return idbOpen(nome).then(function (d) {
+      return new Promise(function (res, rej) {
+        var tx = d.transaction('kv', 'readonly');
+        var rq = tx.objectStore('kv').getAllKeys();
+        rq.onsuccess = function () { d.close(); res(rq.result || []); };
+        rq.onerror = function () { d.close(); rej(rq.error); };
+      });
+    }).catch(function () { return []; });
+  }
 
   /* ---------- texto ---------- */
   function semAcento(s) {
@@ -165,7 +176,7 @@ window.PCPDB = (function () {
   }
 
   return {
-    open: idbOpen, set: idbSet, get: idbGet,
+    open: idbOpen, set: idbSet, get: idbGet, keys: idbKeys,
     semAcento: semAcento, novoId: novoId, num: num, lerCsv: lerCsv,
     kit: kit
   };

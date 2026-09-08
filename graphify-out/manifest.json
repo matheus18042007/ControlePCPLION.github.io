@@ -1,8 +1,8 @@
 {
   "js/app.js": {
-    "mtime": 1788872003.4554675,
-    "seen": 1788872782.0929618,
-    "ast_hash": "c5d09bd532826852fb7397580737b4dc",
+    "mtime": 1788892313.4838827,
+    "seen": 1788894769.6399286,
+    "ast_hash": "250c768687ecc29c921fd6609f12e110",
     "semantic_hash": ""
   },
   "js/auth.js": {
@@ -24,9 +24,9 @@
     "semantic_hash": ""
   },
   "js/nuvem.js": {
-    "mtime": 1788869592.429502,
-    "seen": 1788871468.6357772,
-    "ast_hash": "50b1af11ff503052ce3521b867f97838",
+    "mtime": 1788891608.4051478,
+    "seen": 1788894769.6410112,
+    "ast_hash": "4c32c8d7e151c886b42f0bc20aa24c35",
     "semantic_hash": ""
   },
   "js/usuarios.js": {
@@ -42,9 +42,9 @@
     "semantic_hash": "8eafd84f0da1f2b5cc847402d1b5d653"
   },
   "sw.js": {
-    "mtime": 1788872003.4554675,
-    "seen": 1788872782.093028,
-    "ast_hash": "bc91496fd0cf4129fe76806bc54d1bc4",
+    "mtime": 1788892313.553097,
+    "seen": 1788894769.641704,
+    "ast_hash": "850f044098007404f26bb01dc65327ce",
     "semantic_hash": ""
   },
   "README.md": {
@@ -60,9 +60,9 @@
     "semantic_hash": "c5e6784bad14069cec4fbd9559a3f2e8"
   },
   "index.html": {
-    "mtime": 1788871100.075667,
-    "seen": 1788871468.6357973,
-    "ast_hash": "2e05238aabc15b516a646ef3a502556a",
+    "mtime": 1788888805.1062064,
+    "seen": 1788890139.506892,
+    "ast_hash": "49fcb813cf32ca203981387d9795a6f2",
     "semantic_hash": ""
   },
   "icons/_antigo/icon-192.png": {
@@ -144,9 +144,15 @@
     "semantic_hash": ""
   },
   "js/base.js": {
-    "mtime": 1788871411.8416398,
-    "seen": 1788871468.6357706,
-    "ast_hash": "19191168c134845ef4a7ef26ccc7846b",
+    "mtime": 1788890527.467596,
+    "seen": 1788894769.6404364,
+    "ast_hash": "c4d81c5e9975aa50bc5aa0ac7f160d4e",
+    "semantic_hash": ""
+  },
+  "js/banco.js": {
+    "mtime": 1788892301.1973834,
+    "seen": 1788894769.6404328,
+    "ast_hash": "795ec91f3f1bd3d1dc38e6eb6004c6b9",
     "semantic_hash": ""
   }
 }

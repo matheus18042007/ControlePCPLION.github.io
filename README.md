@@ -4,7 +4,7 @@ PWA (app instalável) de controle de chão de fábrica. Roda 100% no navegador �
 HTML + CSS + JavaScript puro, sem framework, sem build. Funciona offline e
 sincroniza com o Supabase quando tem internet.
 
-Versão atual: **1.23.1** (`APP_VERSION` em `js/app.js`, `CACHE_VERSION` em `sw.js`).
+Versão atual: **1.28.0** (`APP_VERSION` em `js/app.js`, `CACHE_VERSION` em `sw.js`).
 
 ---
 
@@ -251,7 +251,7 @@ gere o novo `js/usuarios.js` e publique.
 ## Publicar uma atualização
 
 1. mudar `APP_VERSION` em `js/app.js`;
-2. mudar `CACHE_VERSION` em `sw.js` (mesmo número, ex. `pcp-lion-v1.20.0`);
+2. mudar `CACHE_VERSION` em `sw.js` (mesmo número, ex. `pcp-lion-v1.28.0`);
 3. se criou arquivo novo, adicionar em `ARQUIVOS` no `sw.js`;
 4. commit + push (GitHub Pages).
 

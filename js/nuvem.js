@@ -716,7 +716,14 @@ var Nuvem = (function () {
     }
   };
 
+  /* leitura crua de qualquer tabela/view, para o modulo Banco de Dados.
+     Usa a mesma paginacao das outras leituras (o Supabase corta em 1000). */
+  function puxarTabela(nome, aoProgredir) {
+    return puxarPaginado('/' + nome + '?select=*', null, aoProgredir);
+  }
+
   return {
+    puxarTabela: puxarTabela,
     carregar: carregar,
     contagem: contagem,
     eficiencia: eficiencia,

@@ -5,7 +5,7 @@
 (function () {
 'use strict';
 
-var APP_VERSION = '1.23.1';
+var APP_VERSION = '1.28.0';
 
 /* ---------------------------------------------------------
    Atalhos DOM
@@ -344,8 +344,29 @@ var MODULOS = [
     viewInicial: 'faltas-lista',
     pronto: true,
     tipo: 'faltas'
+  },
+  {
+    id: 'banco',
+    nome: 'Banco de Dados',
+    desc: 'Backup completo, estrutura das tabelas, endereço da nuvem e notificações.',
+    icone: '⚙️',
+    titulo: 'Banco de Dados',
+    viewInicial: 'banco-backup',
+    pronto: true,
+    tipo: 'banco',
+    /* módulo restrito: só estes logins veem o card no hub */
+    dono: ['matheus movio']
   }
 ];
+
+/* Módulo com "dono" some do hub (e não abre) para os outros.
+   É cerca de tela, não segurança: quem manda no que o cofre
+   entrega continua sendo a senha. */
+function podeVer(m) {
+  if (!m.dono) return true;
+  var eu = String((window.Auth && Auth.usuario()) || '').trim().toLowerCase();
+  return m.dono.some(function (d) { return d.toLowerCase() === eu; });
+}
 
 /* Cada "tipo" de módulo tem um motor que sabe montar a tela e
    abrir o banco dele. Módulo sem tipo (Almoxarifado PBA) roda
@@ -354,12 +375,22 @@ function motorDoTipo(tipo) {
   if (tipo === 'contagem') return window.ModuloContagem;
   if (tipo === 'eficiencia') return window.ModuloEficiencia;
   if (tipo === 'faltas') return window.ModuloFaltas;
+  if (tipo === 'banco') return window.ModuloBanco;
   return null;
 }
 
+/* o modulo Banco precisa acordar os outros motores para que o
+   IndexedDB de cada um exista antes do backup. */
+window.motorDoTipo = motorDoTipo;
+
 function motoresAtivos() {
-  return [window.ModuloContagem, window.ModuloEficiencia, window.ModuloFaltas].filter(Boolean);
+  return [window.ModuloContagem, window.ModuloEficiencia,
+          window.ModuloFaltas, window.ModuloBanco].filter(Boolean);
 }
+
+/* app.js roda dentro de um IIFE, entao MODULOS era invisivel para os outros
+   arquivos. O modulo Banco precisa da lista para saber quais IndexedDB varrer. */
+window.MODULOS = MODULOS;
 
 function moduloPorId(id) {
   for (var i = 0; i < MODULOS.length; i++) if (MODULOS[i].id === id) return MODULOS[i];
@@ -370,7 +401,7 @@ function renderHub() {
   var g = $('hubGrid');
   if (!g) return;
   g.innerHTML = '';
-  MODULOS.forEach(function (m) {
+  MODULOS.filter(podeVer).forEach(function (m) {
     var b = document.createElement('button');
     b.type = 'button';
     b.className = 'hub-card' + (m.pronto ? '' : ' breve');
@@ -411,6 +442,7 @@ function mostrarHub() {
 function abrirModulo(id) {
   var m = moduloPorId(id);
   if (!m || !m.pronto) return;
+  if (!podeVer(m)) { toast('Função restrita', 'err'); return; }
 
   /* módulos externos têm banco próprio e a tela é montada
      na primeira vez que o módulo é aberto */

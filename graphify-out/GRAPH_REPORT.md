@@ -1,12 +1,12 @@
 # Graph Report - App Pcp lion fitness  (2026-09-08)
 
 ## Corpus Check
-- 16 files · ~53,037 words
+- 18 files · ~58,235 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1696 nodes · 4408 edges · 90 communities (26 shown, 58 thin omitted)
-- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 93 edges (avg confidence: 0.85)
+- 1722 nodes · 4459 edges · 93 communities (28 shown, 58 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 98 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
@@ -30,70 +30,72 @@
 - c
 - f
 - sql-wasm.js
-- b
+- r
 - ht
-- y
+- .toString
 - criarInstancia
 - N
 - sr
 - ke
-- .getCount
-- Vr
-- .append
+- a
+- gr
+- .decode
 - c
 - be
 - .get
 - ze
-- fr
-- cr
-- .toString
-- .decode
-- .getX
+- criarInstancia
+- .encode
+- er
+- ve
+- ft
 - j
 - me
 - p
 - ie
-- .charAt
+- .decodeRow
 - je
 - x
-- re
+- .decode
 - et
 - at
+- .getHeight
 - .getSize
-- .parseInformation
-- .substring
+- cr
+- .charAt
 - T
-- w
-- fe
+- wt
+- .getY
 - ot
 - e
 - ar
-- .decode
+- oe
 - ce
 - _
-- r
+- .decodeRow
 - mb
+- .getX
 - it
 - ae
-- .encode
+- w
 - m
-- O
-- I
-- ct
+- le
+- e
 - lt
 - ge
 - push.js
-- .getStartColumn
-- gr
+- .decode
+- b
 - a
 - index.ts
-- Va
 - nt
+- .decode
+- Va
+- O
 - ma
 - Nr
-- Qe
-- rr
-- .encode
+- .encodeLayers
+- yt
 
 ## God Nodes (most connected - your core abstractions)
 1. `_` - 110 edges
@@ -127,11 +129,11 @@
 - **Bundle de scripts carregados pelo index.html (runtime do Almoxarifado PBA + módulos)** — index, js_app_js_module, js_nuvem_js_module, js_auth_js_module, js_usuarios_js_module, js_contagem_js_module, js_eficiencia_js_module, vendor_sql_wasm_module, vendor_html5_qrcode_module [EXTRACTED 1.00]
 - **Esquema de criptografia do cofre (AES-GCM + PBKDF2)** — readme_cofre_vault, readme_aes_gcm_encryption, readme_pbkdf2_derivation, js_usuarios_js_module [EXTRACTED 1.00]
 
-## Communities (90 total, 58 thin omitted)
+## Communities (93 total, 58 thin omitted)
 
 ### Community 0 - "app.js"
 Cohesion: 0.10
-Nodes (62): abrirCadastro(), abrirItem(), abrirModulo(), abrirMov(), acharCol(), agoraISO(), aoLerQR(), atualizarPrevia() (+54 more)
+Nodes (63): abrirCadastro(), abrirItem(), abrirModulo(), abrirMov(), acharCol(), agoraISO(), aoLerQR(), atualizarPrevia() (+55 more)
 
 ### Community 1 - "criarInstancia"
 Cohesion: 0.14
@@ -143,7 +145,7 @@ Nodes (51): admin.html — Cadastro de usuários (página), Auth.admin.abrir (de
 
 ### Community 3 - "req"
 Cohesion: 0.08
-Nodes (50): aparelho(), ativa(), cadastrarItem(), carregar(), contagem(), apagarFoto(), cadastrar(), definir() (+42 more)
+Nodes (51): aparelho(), ativa(), cadastrarItem(), carregar(), contagem(), apagarFoto(), cadastrar(), definir() (+43 more)
 
 ### Community 4 - "criarInstancia"
 Cohesion: 0.15
@@ -159,7 +161,7 @@ Nodes (18): background_color, categories, description, dir, display, icons, id, 
 
 ### Community 7 - "ee"
 Cohesion: 0.06
-Nodes (4): bt, ee, ne, rt
+Nodes (5): bt, ee, ne, re, rt
 
 ### Community 8 - "PCP Lion PWA Icon (512x512)"
 Cohesion: 0.40
@@ -174,48 +176,56 @@ Cohesion: 0.50
 Nodes (4): PBA Maskable App Icon (512px, superseded), Android Adaptive Icon Maskable Safe Zone, PBA Brand Mark / Wordmark, QR-Code Finder Pattern Motif
 
 ### Community 13 - "base.js"
-Cohesion: 0.20
-Nodes (7): idbGet(), idbOpen(), idbSet(), kit(), k, lerCsv(), semAcento()
+Cohesion: 0.19
+Nodes (8): idbGet(), idbKeys(), idbOpen(), idbSet(), kit(), k, lerCsv(), semAcento()
 
 ### Community 19 - "c"
-Cohesion: 0.06
-Nodes (8): c, dr, he, K, Q, tt, xe, Z
-
-### Community 20 - "f"
-Cohesion: 0.06
-Nodes (5): a, decodeBitmap(), e(), f, s
+Cohesion: 0.07
+Nodes (7): c, dr, K, Q, tt, xe, Z
 
 ### Community 21 - "sql-wasm.js"
 Cohesion: 0.12
 Nodes (34): ab(), ac(), b(), bb(), bc(), cb(), cc(), createNode() (+26 more)
 
+### Community 23 - "ht"
+Cohesion: 0.11
+Nodes (4): ht, kt, vt, xt
+
+### Community 24 - ".toString"
+Cohesion: 0.13
+Nodes (3): Qt, y, zt
+
 ### Community 25 - "criarInstancia"
 Cohesion: 0.15
 Nodes (38): clsStatus(), criarInstancia(), abrirBanco(), abrirNova(), acharFalta(), adicionarFalta(), aoDigitarCodigo(), apagarLocal() (+30 more)
+
+### Community 30 - "gr"
+Cohesion: 0.16
+Nodes (3): br(), gr, Vr
+
+### Community 31 - ".decode"
+Cohesion: 0.18
+Nodes (3): he, te, ue
 
 ### Community 32 - "c"
 Cohesion: 0.15
 Nodes (5): a(), c(), oa(), Qa(), sb()
 
-### Community 38 - ".toString"
-Cohesion: 0.12
-Nodes (3): er, ir(), tr
+### Community 36 - "criarInstancia"
+Cohesion: 0.17
+Nodes (22): criarInstancia(), abrirCopia(), acordarModulos(), baixarFila(), baixarNuvem(), bancosConhecidos(), carimbo(), carregarSQL() (+14 more)
 
-### Community 47 - "x"
-Cohesion: 0.10
-Nodes (3): mt, wt, x
-
-### Community 53 - ".parseInformation"
-Cohesion: 0.12
-Nodes (5): jt, Qt, vt, xt, yt
+### Community 48 - ".decode"
+Cohesion: 0.15
+Nodes (3): ir(), or, rr()
 
 ### Community 66 - "mb"
 Cohesion: 0.20
 Nodes (7): d(), ha(), lc(), mb(), readlink(), symlink(), Zb()
 
 ### Community 76 - "ge"
-Cohesion: 0.19
-Nodes (4): constructor(), ge, gt, lr
+Cohesion: 0.17
+Nodes (3): constructor(), ge, lr
 
 ### Community 77 - "push.js"
 Cohesion: 0.54
@@ -235,22 +245,22 @@ Nodes (5): ec(), jb(), ma(), Ta(), write()
 
 ## Knowledge Gaps
 - **51 isolated node(s):** `name`, `short_name`, `description`, `id`, `start_url` (+46 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 337 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 338 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **58 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `_` connect `_` to `ee`, `c`, `f`, `b`, `ht`, `y`, `N`, `sr`, `ke`, `.getCount`, `Vr`, `.append`, `be`, `.get`, `ze`, `fr`, `cr`, `.toString`, `.decode`, `.getX`, `j`, `me`, `p`, `ie`, `.charAt`, `je`, `x`, `re`, `et`, `at`, `.getSize`, `.parseInformation`, `.substring`, `T`, `w`, `fe`, `ot`, `ar`, `.decode`, `ce`, `r`, `it`, `ae`, `.encode`, `m`, `O`, `I`, `ct`, `lt`, `ge`, `.getStartColumn`, `gr`, `nt`, `Nr`, `Qe`, `rr`, `.encode`?**
-  _High betweenness centrality (0.379) - this node is a cross-community bridge._
-- **Why does `R()` connect `sql-wasm.js` to `a`, `Va`, `ma`, `x`?**
-  _High betweenness centrality (0.067) - this node is a cross-community bridge._
-- **Why does `f` connect `f` to `_`, `w`, `.toString`?**
-  _High betweenness centrality (0.053) - this node is a cross-community bridge._
+- **Why does `_` connect `_` to `ee`, `c`, `f`, `r`, `ht`, `.toString`, `N`, `sr`, `ke`, `a`, `gr`, `.decode`, `be`, `.get`, `ze`, `.encode`, `er`, `ve`, `ft`, `j`, `me`, `p`, `ie`, `.decodeRow`, `je`, `x`, `.decode`, `et`, `at`, `.getHeight`, `.getSize`, `cr`, `.charAt`, `T`, `wt`, `.getY`, `ot`, `ar`, `oe`, `ce`, `.decodeRow`, `.getX`, `it`, `ae`, `w`, `m`, `le`, `e`, `lt`, `ge`, `.decode`, `b`, `nt`, `.decode`, `O`, `Nr`, `.encodeLayers`, `yt`?**
+  _High betweenness centrality (0.346) - this node is a cross-community bridge._
+- **Why does `R()` connect `sql-wasm.js` to `a`, `.decodeRow`, `Va`, `ma`?**
+  _High betweenness centrality (0.070) - this node is a cross-community bridge._
+- **Why does `f` connect `f` to `_`, `er`, `w`, `e`, `.attachStreamToVideo`, `.decodeOnceFromStream`, `a`?**
+  _High betweenness centrality (0.050) - this node is a cross-community bridge._
 - **What connects `name`, `short_name`, `description` to the rest of the system?**
   _51 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `app.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.09920983318700614 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.09761295822676896 - nodes in this community are weakly interconnected._
 - **Should `criarInstancia` be split into smaller, more focused modules?**
   _Cohesion score 0.14268292682926828 - nodes in this community are weakly interconnected._
 - **Should `index.html — Controle PCP LION (app principal)` be split into smaller, more focused modules?**
