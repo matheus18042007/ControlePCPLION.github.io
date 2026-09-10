@@ -54,7 +54,7 @@ window.ModuloFaltas = (function () {
     var IDB = 'pcp_' + id;
 
     var db = null, saveTimer = null, montado = false, promessa = null;
-    var estado = { busca: '', apiNuvem: null, filtroAlm: '', filtroStatus: '', almNova: '' };
+    var estado = { busca: '', apiNuvem: null, filtroAlm: '', filtroStatus: '', almNova: '', almZerar: '' };
 
     /* almoxarifados do modulo */
     var ALMOX = [
@@ -246,6 +246,23 @@ window.ModuloFaltas = (function () {
         '      <button id="' + id + 'Add" class="btn primary" type="button">Adicionar falta</button>',
         '    </div>',
         '  </div>',
+        '</div>',
+        '<div id="' + id + 'SheetZerar" class="sheet-wrap" data-modulo="' + id + '">',
+        '  <div class="sheet">',
+        '    <div class="sheet-handle"></div>',
+        '    <h3>Zerar faltas</h3>',
+        '    <p class="muted small">Apaga as faltas em aberto. O histórico de faltas supridas NÃO é afetado.</p>',
+        '    <label class="lbl">Almoxarifado</label>',
+        '    <div class="falta-alm-opts alm3" id="' + id + 'ZerarOpts">',
+        '      <button type="button" data-alm="" class="on">Todos</button>',
+        '      <button type="button" data-alm="frente">Frente</button>',
+        '      <button type="button" data-alm="fundo">Fundo</button>',
+        '    </div>',
+        '    <div class="sheet-actions">',
+        '      <button class="btn ghost" data-' + id + '-fechar="1" type="button">Cancelar</button>',
+        '      <button id="' + id + 'ZerarOk" class="btn danger" type="button">Zerar faltas</button>',
+        '    </div>',
+        '  </div>',
         '</div>'
       ].join('\n');
       while (sheets.firstChild) document.body.appendChild(sheets.firstChild);
@@ -255,6 +272,7 @@ window.ModuloFaltas = (function () {
 
     function fecharSheets() {
       $(id + 'SheetNova').classList.remove('open');
+      $(id + 'SheetZerar').classList.remove('open');
     }
 
     /* =======================================================
@@ -711,19 +729,32 @@ window.ModuloFaltas = (function () {
     }
 
     function zerarFaltas() {
+      if (!nv()) { toast('Sem nuvem: faça login no cofre', 'err'); return; }
+      estado.almZerar = '';
+      qsa('#' + id + 'ZerarOpts button').forEach(function (b) {
+        b.classList.toggle('on', b.getAttribute('data-alm') === '');
+      });
+      $(id + 'SheetZerar').classList.add('open');
+    }
+
+    function confirmarZerar() {
       var api = nv();
       if (!api) { toast('Sem nuvem: faça login no cofre', 'err'); return; }
-      if (!confirm('Zerar as faltas em aberto?\n\nO histórico de faltas supridas NÃO é afetado.')) return;
+      var alvo = estado.almZerar || '';
+      fecharSheets();
       P.nuvemStatus('Zerando...', 'sync');
       api.puxarFaltas().then(function (lista) {
         var usuario = P.operador();
-        return Promise.all((lista || []).map(function (f) {
+        return Promise.all((lista || []).filter(function (f) {
+          return !alvo || normAlmox(f.almoxarifado) === alvo;
+        }).map(function (f) {
           return api.excluir(f.id, usuario);
         }));
       }).then(function () {
-        db.run('DELETE FROM faltas;');
+        if (alvo) db.run('DELETE FROM faltas WHERE lower(almoxarifado)=?', [alvo]);
+        else db.run('DELETE FROM faltas;');
         salvar(true);
-        toast('Faltas zeradas', 'ok');
+        toast(alvo ? 'Faltas de ' + labelAlmox(alvo) + ' zeradas' : 'Faltas zeradas', 'ok');
         render();
         statusNuvem();
       })['catch'](function (e) {
@@ -895,6 +926,13 @@ window.ModuloFaltas = (function () {
       $(id + 'ExportCsv').addEventListener('click', exportarCsv);
       $(id + 'Apagar').addEventListener('click', apagarLocal);
       $(id + 'Zerar').addEventListener('click', zerarFaltas);
+      $(id + 'ZerarOk').addEventListener('click', confirmarZerar);
+      $(id + 'ZerarOpts').addEventListener('click', function (ev) {
+        var b = ev.target.closest('button[data-alm]'); if (!b) return;
+        estado.almZerar = b.getAttribute('data-alm');
+        qsa('#' + id + 'ZerarOpts button').forEach(function (o) { o.classList.remove('on'); });
+        b.classList.add('on');
+      });
 
       $(id + 'EscolherCsv').addEventListener('click', function () { $(id + 'FileCsv').click(); });
       $(id + 'FileCsv').addEventListener('change', function (ev) {

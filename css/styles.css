@@ -458,6 +458,7 @@ input:focus{border-color:var(--accent)}
 
 /* select de almoxarifado no registro */
 .falta-alm-opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:2px}
+.falta-alm-opts.alm3{grid-template-columns:1fr 1fr 1fr}
 .falta-alm-opts button{
   background:var(--card-2);color:var(--muted);
   border:1px solid var(--line);border-radius:10px;
