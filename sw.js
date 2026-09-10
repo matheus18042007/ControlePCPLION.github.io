@@ -8,7 +8,7 @@
    Para publicar uma atualização: mudar CACHE_VERSION abaixo.
    ============================================================ */
 
-var CACHE_VERSION = 'pcp-lion-v1.28.0';
+var CACHE_VERSION = 'pcp-lion-v1.29.0';
 
 var ARQUIVOS = [
   './',
@@ -17,6 +17,7 @@ var ARQUIVOS = [
   './css/styles.css',
   './admin.html',
   './js/base.js',
+  './js/modulos.js',
   './js/usuarios.js',
   './js/auth.js',
   './js/nuvem.js',
