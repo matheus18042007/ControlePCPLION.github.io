@@ -202,6 +202,8 @@ window.ModuloFaltas = (function () {
         '    <div class="kv"><span>Faltas em aberto</span><b id="' + id + 'StatFaltas">0</b></div>',
         '    <div class="kv"><span>Último salvamento</span><b id="' + id + 'StatSalvo">-</b></div>',
         '    <button id="' + id + 'ExportCsv" class="btn ghost block" type="button">&#11015; Exportar faltas (.csv)</button>',
+        '    <button id="' + id + 'Zerar" class="btn danger block" type="button">&#9851; Zerar faltas</button>',
+        '    <p class="muted small">Apaga as faltas em aberto (aparelho e nuvem). O histórico continua.</p>',
         '    <button id="' + id + 'Apagar" class="btn danger block" type="button">&#128465; Limpar cópia local deste módulo</button>',
         '  </div>',
         '</section>'
@@ -708,6 +710,45 @@ window.ModuloFaltas = (function () {
       render();
     }
 
+    function zerarFaltas() {
+      var api = nv();
+      if (!api) { toast('Sem nuvem: faça login no cofre', 'err'); return; }
+      if (!confirm('Zerar as faltas em aberto?\n\nO histórico de faltas supridas NÃO é afetado.')) return;
+      P.nuvemStatus('Zerando...', 'sync');
+      api.puxarFaltas().then(function (lista) {
+        var usuario = P.operador();
+        return Promise.all((lista || []).map(function (f) {
+          return api.excluir(f.id, usuario);
+        }));
+      }).then(function () {
+        db.run('DELETE FROM faltas;');
+        salvar(true);
+        toast('Faltas zeradas', 'ok');
+        render();
+        statusNuvem();
+      })['catch'](function (e) {
+        toast('Falha ao zerar: ' + e.message, 'err');
+        statusNuvem();
+      });
+    }
+
+    /* histórico maior que 15 dias vira lixo - apaga na nuvem */
+    var HIST_DIAS = 15;
+    function podarHistorico(lista) {
+      var api = nv();
+      var limite = Date.now() - HIST_DIAS * 86400000;
+      var velhas = (lista || []).filter(function (f) {
+        var t = Date.parse(f.suprida_em || f.criado_em || '');
+        return t && t < limite;
+      });
+      if (!api || !velhas.length) return lista || [];
+      var usuario = P.operador();
+      velhas.forEach(function (f) { api.excluir(f.id, usuario)['catch'](function () {}); });
+      var mortas = {};
+      velhas.forEach(function (f) { mortas[f.id] = true; });
+      return (lista || []).filter(function (f) { return !mortas[f.id]; });
+    }
+
     /* ---------- histórico: só nuvem, sob demanda ---------- */
     function renderHistorico(recarregar) {
       var el = $(id + 'HistLista');
@@ -720,7 +761,7 @@ window.ModuloFaltas = (function () {
       if (estado.hist && !recarregar) { pintarHistorico(estado.hist); return; }
       el.innerHTML = '<div class="vazio">Carregando…</div>';
       api.puxarHistorico(300).then(function (lista) {
-        estado.hist = lista || [];
+        estado.hist = podarHistorico(lista);
         pintarHistorico(estado.hist);
       }).catch(function (e) {
         el.innerHTML = '<div class="vazio">Falhou ao buscar: ' + esc(e.message) + '</div>';
@@ -853,6 +894,7 @@ window.ModuloFaltas = (function () {
       $(id + 'Enviar').addEventListener('click', enviarComponentesDaqui);
       $(id + 'ExportCsv').addEventListener('click', exportarCsv);
       $(id + 'Apagar').addEventListener('click', apagarLocal);
+      $(id + 'Zerar').addEventListener('click', zerarFaltas);
 
       $(id + 'EscolherCsv').addEventListener('click', function () { $(id + 'FileCsv').click(); });
       $(id + 'FileCsv').addEventListener('change', function (ev) {

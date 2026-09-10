@@ -204,15 +204,29 @@ var Auth = (function () {
             salt: paraB64(salt),
             env: env
           };
+          if (dados.mods) u.mods = dados.mods.slice();
           /* troca de senha = substitui o envelope do mesmo login */
           var lg = u.login.toLowerCase(), trocou = false;
           for (var i = 0; i < c.usuarios.length; i++) {
-            if (String(c.usuarios[i].login).toLowerCase() === lg) { c.usuarios[i] = u; trocou = true; }
+            if (String(c.usuarios[i].login).toLowerCase() === lg) {
+              /* troca de senha mantem as permissoes ja gravadas */
+              if (!u.mods && c.usuarios[i].mods) u.mods = c.usuarios[i].mods;
+              c.usuarios[i] = u; trocou = true;
+            }
           }
           if (!trocou) c.usuarios.push(u);
           return c;
         });
       });
+    },
+
+    /* permissao de modulos (texto claro: e cerca de tela) */
+    setMods: function (c, login, mods) {
+      var lg = String(login).toLowerCase();
+      for (var i = 0; i < c.usuarios.length; i++) {
+        if (String(c.usuarios[i].login).toLowerCase() === lg) c.usuarios[i].mods = mods.slice();
+      }
+      return c;
     },
 
     removerUsuario: function (c, login) {

@@ -7,7 +7,7 @@
    este arquivo nao serve para nada.
 
    Usuarios: Matheus movio, Alan Marques, Joao Victor, Kauã, Gabriel B., Gabriel Kirschner, Cesar
-   Gerado em: 04/09/2026, 16:02:30
+   Gerado em: 10/09/2026, 06:50:21
    ========================================================= */
 var COFRE = {
   "v": 1,
@@ -24,7 +24,15 @@ var COFRE = {
       "env": {
         "iv": "jEY+u/h+jdPhxTtK",
         "ct": "RotbwofJTr3ywe7K594YvC8P8o2pfU4H8jOpwCoKBGaiTHs7mjkA4MJ7T6pZnSPI"
-      }
+      },
+      "mods": [
+        "almox",
+        "quadro",
+        "carenagem",
+        "eficiencia",
+        "faltas",
+        "banco"
+      ]
     },
     {
       "login": "Alan Marques",
@@ -33,7 +41,10 @@ var COFRE = {
       "env": {
         "iv": "sVY4NqNvNqqC8GMx",
         "ct": "tFJTVZzsVVNcfE5wbcD3V/e6Frqth5m7Idv3kIax3ShlPCiJEDqRLSwsHIlGPP29"
-      }
+      },
+      "mods": [
+        "almox"
+      ]
     },
     {
       "login": "Joao Victor",
@@ -42,7 +53,13 @@ var COFRE = {
       "env": {
         "iv": "aJFCiOCyS/NOlrNB",
         "ct": "LtBm+CvSRkqWE+mEYTkM5l2v6MO02Cl+sc6G121tCRDszxRfl2Ax4FnJjvZPyIeX"
-      }
+      },
+      "mods": [
+        "quadro",
+        "carenagem",
+        "eficiencia",
+        "faltas"
+      ]
     },
     {
       "login": "Kauã",
@@ -51,7 +68,13 @@ var COFRE = {
       "env": {
         "iv": "vKBCV/vjNsfMMKWs",
         "ct": "FWkDgL5h3XcRgs7i4LpPs8Y/MBVirJ1KcufKDeSVUUcREN6a5+cLqiAlFxgACv84"
-      }
+      },
+      "mods": [
+        "quadro",
+        "carenagem",
+        "eficiencia",
+        "faltas"
+      ]
     },
     {
       "login": "Gabriel B.",
@@ -60,7 +83,10 @@ var COFRE = {
       "env": {
         "iv": "TSpaZb20DUwSkkJw",
         "ct": "qDkaR2psAwcA/WhacprVcU9wenSTQ4GdoZJu8M34pZB0TP1OLFRqL5LS0cGTSEsC"
-      }
+      },
+      "mods": [
+        "eficiencia"
+      ]
     },
     {
       "login": "Gabriel Kirschner",
@@ -69,7 +95,13 @@ var COFRE = {
       "env": {
         "iv": "Ay1dgyHikIgugwRT",
         "ct": "cVjZrUB1K2MHSKr5xcBhHQIsbhwWrEZV9ugzJmxnwg4eH/OVSaSl+1OK1r80zVBI"
-      }
+      },
+      "mods": [
+        "quadro",
+        "carenagem",
+        "eficiencia",
+        "faltas"
+      ]
     },
     {
       "login": "Cesar",
@@ -78,7 +110,14 @@ var COFRE = {
       "env": {
         "iv": "6MV+pqXVL1YbUsS6",
         "ct": "lpFo4iaj1TgLaQbaB+LeXdJAQ/kQIYpxjlBaa3u0j5fFhd/F3821Zov+OB4ldIhl"
-      }
+      },
+      "mods": [
+        "almox",
+        "quadro",
+        "carenagem",
+        "eficiencia",
+        "faltas"
+      ]
     }
   ]
 };
