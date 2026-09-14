@@ -569,14 +569,16 @@ function abrirItem(codigo) {
 function linhaMov(m, comNome) {
   var ent = m.tipo === 'ENTRADA';
   var sub = [fmtDataHora(m.data_hora)];
-  if (m.usuario) sub.push(m.usuario);
   if (m.observacao) sub.push(m.observacao);
+  /* quem deu a entrada / saida */
+  var quem = '<div class="li-sub">👤 ' + esc(m.usuario || 'nao identificado') + '</div>';
   return '<div class="li">' +
     '<span class="badge ' + (ent ? 'e' : 's') + '">' + (ent ? 'ENT' : 'SAI') + '</span>' +
     '<div class="li-main">' +
       (comNome ? '<div class="li-code">' + esc(m.codigo_item) + '</div>' +
                  '<div class="li-nome">' + esc(m.nome || '') + '</div>' : '') +
       '<div class="li-sub">' + esc(sub.join(' • ')) + '</div>' +
+      quem +
     '</div>' +
     '<div class="li-saldo"><b style="color:' + (ent ? 'var(--ok)' : 'var(--danger)') + '">' +
       (ent ? '+' : '−') + fmtNum(m.quantidade) + '</b></div>' +
@@ -605,6 +607,7 @@ function abrirMov(tipo) {
   $('movNome').textContent = it.nome;
   $('movSaldoAtual').textContent = it.codigo + ' • saldo: ' + fmtNum(it.estoque_atual) + ' ' + (it.unidade_medida || 'UN');
   $('movQtd').value = '1';
+  $('movSolic').value = '';
   $('movObs').value = '';
   $('btnMovConfirmar').className = 'btn ' + (tipo === 'ENTRADA' ? 'entrada' : 'saida');
   atualizarPrevia();
@@ -632,12 +635,13 @@ function confirmarMov() {
   var ent = estado.movTipo === 'ENTRADA';
   var novo = ent ? atual + q : atual - q;
 
-  if (!ent && q > atual) {
-    if (!confirm('Saída maior que o saldo disponível (' + fmtNum(atual) + ').\n' +
-                 'O saldo ficará negativo (' + fmtNum(novo) + ').\n\nConfirmar mesmo assim?')) return;
-  }
+  var solic = ($('movSolic').value || '').trim();
+  var motivo = ($('movObs').value || '').trim();
+  if (!solic) { toast('Informe quem solicitou', 'err'); $('movSolic').focus(); return; }
+  if (!motivo) { toast('Informe o motivo', 'err'); $('movObs').focus(); return; }
 
-  var obs = ($('movObs').value || '').trim();
+  /* solicitante e motivo viajam juntos na observacao (sem mudar o banco) */
+  var obs = 'Solicitante: ' + solic + ' • Motivo: ' + motivo;
 
   /* ---- com nuvem: a gravação oficial é no servidor ---- */
   if (Nuvem.ativa()) {
@@ -661,7 +665,7 @@ function confirmarMov() {
         vibrar(60);
         bip(ent ? 1046 : 700, 0.1);
         toast((ent ? 'Entrada' : 'Saída') + ' de ' + fmtNum(q) + ' registrada. Saldo: ' + fmtNum(saldoFinal), 'ok');
-        abrirItem(it.codigo);
+        mostrarView('estoque');
       })
       .catch(function (e) {
         atualizarStatusNuvem();
@@ -691,7 +695,7 @@ function confirmarMov() {
   vibrar(60);
   bip(ent ? 1046 : 700, 0.1);
   toast((ent ? 'Entrada' : 'Saída') + ' de ' + fmtNum(q) + ' registrada. Saldo: ' + fmtNum(novo), 'ok');
-  abrirItem(it.codigo);
+  mostrarView('estoque');
 }
 
 function fecharSheets() {

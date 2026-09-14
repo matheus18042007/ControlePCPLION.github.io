@@ -295,7 +295,7 @@ var Nuvem = (function () {
 
     /* absoluto = true  -> "a quantidade agora e esta"
        absoluto = false -> "some/subtraia isto" (botoes - e +) */
-    function definir(codigo, qtd, absoluto, usuario, obs) {
+    function definir(codigo, qtd, absoluto, usuario, obs, cores) {
       return req('/rpc/contagem_definir', {
         method: 'POST',
         body: {
@@ -305,7 +305,9 @@ var Nuvem = (function () {
           p_absoluto: !!absoluto,
           p_usuario: usuario || null,
           p_obs: obs || null,
-          p_aparelho: aparelho()
+          p_aparelho: aparelho(),
+          /* {qtd_onix: 2, ...} - so os modulos com cor mandam isto */
+          p_cores: cores || null
         }
       });
     }

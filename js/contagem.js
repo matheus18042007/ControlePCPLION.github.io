@@ -46,6 +46,16 @@ window.ModuloContagem = (function () {
        Fica no IndexedDB local (kv: foto_<codigo>), fora do SQLite,
        porque a sincronização apaga e regrava a tabela de itens. */
     var TEM_FOTO = (id === 'carenagem');
+    /* contagem por cor: só Carenagens VG. A qtd do item passa a ser a soma
+       das 5 cores, gravadas em uma coluna por cor (local e na nuvem). */
+    var TEM_CORES = (id === 'carenagem');
+    var CORES = [
+      { col: 'qtd_onix', nome: 'Ônix' },
+      { col: 'qtd_preto_fosco', nome: 'Preto fosco' },
+      { col: 'qtd_black_piano', nome: 'Black piano' },
+      { col: 'qtd_cinza', nome: 'Cinza' },
+      { col: 'qtd_champanhe', nome: 'Champanhe' }
+    ];
 
     var db = null, saveTimer = null, montado = false, promessa = null;
     var estado = { busca: '', movFiltro: 'TODOS', itemAtual: null, editando: false };
@@ -55,6 +65,9 @@ window.ModuloContagem = (function () {
       '  codigo TEXT PRIMARY KEY,',
       '  nome TEXT NOT NULL,',
       '  qtd REAL NOT NULL DEFAULT 0,',
+      (TEM_CORES ? CORES.map(function (c) {
+        return '  ' + c.col + ' REAL NOT NULL DEFAULT 0,';
+      }).join('\n') : ''),
       '  data_cadastro DATETIME',
       ');',
       'CREATE TABLE IF NOT EXISTS ' + MOV + ' (',
@@ -74,7 +87,22 @@ window.ModuloContagem = (function () {
     /* ---------- banco (kit compartilhado) ---------- */
     var K = window.PCPDB.kit({ idb: IDB, id: id, schema: SCHEMA });
 
-    function abrirBanco() { return K.abrir().then(function () { db = K.db; }); }
+    function abrirBanco() {
+      return K.abrir().then(function () {
+        db = K.db;
+        if (!TEM_CORES) return;
+        /* banco local antigo: acrescenta as colunas de cor que faltarem */
+        var tem = {};
+        K.sel('PRAGMA table_info(' + TAB + ')').forEach(function (c) { tem[c.name] = true; });
+        var faltou = false;
+        CORES.forEach(function (c) {
+          if (tem[c.col]) return;
+          db.run('ALTER TABLE ' + TAB + ' ADD COLUMN ' + c.col + ' REAL NOT NULL DEFAULT 0');
+          faltou = true;
+        });
+        if (faltou) salvar(true);
+      });
+    }
 
     var salvar = K.salvar, sel = K.sel, um = K.um, escalar = K.escalar;
 
@@ -94,6 +122,14 @@ window.ModuloContagem = (function () {
       return apiNuvem;
     }
 
+    /* colunas de cor: lista para SQL e valores de um registro */
+    var COLS_COR = TEM_CORES ? CORES.map(function (c) { return c.col; }) : [];
+    var SQL_COR = COLS_COR.length ? ',' + COLS_COR.join(',') : '';
+    var PH_COR = COLS_COR.map(function () { return ',?'; }).join('');
+    function coresDe(o) {
+      return COLS_COR.map(function (c) { return Number(o && o[c]) || 0; });
+    }
+
     /* substitui o cache local pelo conteúdo da nuvem */
     function gravarCache(dados) {
       db.run('BEGIN');
@@ -101,8 +137,10 @@ window.ModuloContagem = (function () {
         db.run('DELETE FROM ' + MOV);
         db.run('DELETE FROM ' + TAB);
         dados.itens.forEach(function (it) {
-          db.run('INSERT INTO ' + TAB + ' (codigo,nome,qtd,data_cadastro) VALUES (?,?,?,?)',
-            [it.codigo, it.nome, Number(it.qtd) || 0, P.paraLocal(it.data_cadastro)]);
+          db.run('INSERT INTO ' + TAB + ' (codigo,nome,qtd,data_cadastro' + SQL_COR +
+            ') VALUES (?,?,?,?' + PH_COR + ')',
+            [it.codigo, it.nome, Number(it.qtd) || 0, P.paraLocal(it.data_cadastro)]
+              .concat(coresDe(it)));
         });
         dados.movimentacoes.forEach(function (m) {
           db.run('INSERT INTO ' + MOV +
@@ -127,11 +165,15 @@ window.ModuloContagem = (function () {
     function upsertLocal(it) {
       if (!it) return;
       if (um('SELECT codigo FROM ' + TAB + ' WHERE codigo = ?', [it.codigo])) {
-        db.run('UPDATE ' + TAB + ' SET nome = ?, qtd = ? WHERE codigo = ?',
-          [it.nome, Number(it.qtd) || 0, it.codigo]);
+        db.run('UPDATE ' + TAB + ' SET nome = ?, qtd = ?' +
+          COLS_COR.map(function (c) { return ', ' + c + ' = ?'; }).join('') +
+          ' WHERE codigo = ?',
+          [it.nome, Number(it.qtd) || 0].concat(coresDe(it), [it.codigo]));
       } else {
-        db.run('INSERT INTO ' + TAB + ' (codigo,nome,qtd,data_cadastro) VALUES (?,?,?,?)',
-          [it.codigo, it.nome, Number(it.qtd) || 0, P.paraLocal(it.data_cadastro)]);
+        db.run('INSERT INTO ' + TAB + ' (codigo,nome,qtd,data_cadastro' + SQL_COR +
+          ') VALUES (?,?,?,?' + PH_COR + ')',
+          [it.codigo, it.nome, Number(it.qtd) || 0, P.paraLocal(it.data_cadastro)]
+            .concat(coresDe(it)));
       }
     }
 
@@ -321,18 +363,35 @@ window.ModuloContagem = (function () {
           '      </div>',
           '    </div>'
         ].join('\n') : '',
-        '    <label class="lbl">Quantidade contada</label>',
-        '    <div class="qty">',
-        '      <button class="qty-btn" data-' + id + 'passo="-1" type="button">-</button>',
-        '      <input id="' + id + 'QtdInput" type="number" inputmode="decimal" step="any" min="0" value="0">',
-        '      <button class="qty-btn" data-' + id + 'passo="1" type="button">+</button>',
-        '    </div>',
-        '    <div class="quick-qty">',
-        '      <button type="button" data-' + id + 'set="0">0</button>',
-        '      <button type="button" data-' + id + 'set="10">10</button>',
-        '      <button type="button" data-' + id + 'set="50">50</button>',
-        '      <button type="button" data-' + id + 'set="100">100</button>',
-        '    </div>',
+        TEM_CORES ? [
+          '    <label class="lbl">Quantidade contada por cor</label>'
+        ].concat(CORES.map(function (c) {
+          return [
+            '    <div class="mov-item">',
+            '      <b>' + c.nome + '</b>',
+            '      <div class="qty">',
+            '        <button class="qty-btn" data-' + id + 'cor="' + c.col + '" data-' + id + 'corpasso="-1" type="button">-</button>',
+            '        <input id="' + id + 'Cor_' + c.col + '" class="' + id + '-cor" type="number" inputmode="decimal" step="any" min="0" value="0">',
+            '        <button class="qty-btn" data-' + id + 'cor="' + c.col + '" data-' + id + 'corpasso="1" type="button">+</button>',
+            '      </div>',
+            '    </div>'
+          ].join('\n');
+        })).concat([
+          '    <input id="' + id + 'QtdInput" type="number" value="0" hidden>'
+        ]).join('\n') : [
+          '    <label class="lbl">Quantidade contada</label>',
+          '    <div class="qty">',
+          '      <button class="qty-btn" data-' + id + 'passo="-1" type="button">-</button>',
+          '      <input id="' + id + 'QtdInput" type="number" inputmode="decimal" step="any" min="0" value="0">',
+          '      <button class="qty-btn" data-' + id + 'passo="1" type="button">+</button>',
+          '    </div>',
+          '    <div class="quick-qty">',
+          '      <button type="button" data-' + id + 'set="0">0</button>',
+          '      <button type="button" data-' + id + 'set="10">10</button>',
+          '      <button type="button" data-' + id + 'set="50">50</button>',
+          '      <button type="button" data-' + id + 'set="100">100</button>',
+          '    </div>'
+        ].join('\n'),
         '    <label class="lbl">Observação (opcional)</label>',
         '    <input id="' + id + 'QtdObs" type="text" placeholder="Ex.: contagem do turno, sobra de linha...">',
         '    <div id="' + id + 'QtdPrevia" class="previa"></div>',
@@ -515,10 +574,29 @@ window.ModuloContagem = (function () {
       $(id + 'QtdAtual').textContent = 'Qtd atual: ' + P.fmtNum(it.qtd) + ' ' + UN;
       $(id + 'QtdInput').value = it.qtd;
       $(id + 'QtdObs').value = '';
+      if (TEM_CORES) {
+        CORES.forEach(function (c) { $(id + 'Cor_' + c.col).value = Number(it[c.col]) || 0; });
+        somarCores();
+      }
       if (TEM_FOTO) carregarFoto(codigo);
       previaQtd();
       $(id + 'SheetQtd').classList.add('open');
-      setTimeout(function () { $(id + 'QtdInput').select(); }, 120);
+      if (!TEM_CORES) setTimeout(function () { $(id + 'QtdInput').select(); }, 120);
+    }
+
+    /* lê os campos de cor do sheet e soma no campo oculto de quantidade */
+    function coresDoSheet() {
+      var o = {};
+      CORES.forEach(function (c) { o[c.col] = num($(id + 'Cor_' + c.col).value); });
+      return o;
+    }
+
+    function somarCores() {
+      var cores = coresDoSheet();
+      var t = 0;
+      COLS_COR.forEach(function (c) { t += cores[c]; });
+      $(id + 'QtdInput').value = t;
+      previaQtd();
     }
 
     function previaQtd() {
@@ -533,8 +611,17 @@ window.ModuloContagem = (function () {
     }
 
     /* grava a mudança de quantidade no cache local + histórico */
-    function aplicarLocal(codigo, qtdFinal, delta, obs) {
-      db.run('UPDATE ' + TAB + ' SET qtd = ? WHERE codigo = ?', [qtdFinal, codigo]);
+    function aplicarLocal(codigo, qtdFinal, delta, obs, cores) {
+      if (TEM_CORES && cores) {
+        db.run(
+          'UPDATE ' + TAB + ' SET qtd = ?' +
+          COLS_COR.map(function (c) { return ', ' + c + ' = ?'; }).join('') +
+          ' WHERE codigo = ?',
+          [qtdFinal].concat(COLS_COR.map(function (c) { return Number(cores[c]) || 0; }), [codigo])
+        );
+      } else {
+        db.run('UPDATE ' + TAB + ' SET qtd = ? WHERE codigo = ?', [qtdFinal, codigo]);
+      }
       db.run(
         'INSERT INTO ' + MOV + ' (codigo_item,tipo,quantidade,qtd_final,data_hora,usuario,observacao) VALUES (?,?,?,?,?,?,?)',
         [codigo, delta > 0 ? 'ENTRADA' : 'SAIDA', Math.abs(delta), qtdFinal,
@@ -546,10 +633,15 @@ window.ModuloContagem = (function () {
     function confirmarQtd() {
       var it = estado.itemAtual;
       if (!it) return;
+      if (TEM_CORES) somarCores();
+      var cores = TEM_CORES ? coresDoSheet() : null;
       var nova = num($(id + 'QtdInput').value);
       if (nova < 0) { toast('Quantidade não pode ser negativa', 'err'); return; }
       var d = nova - it.qtd;
-      if (d === 0) { fecharSheets(); return; }
+      var mudouCor = TEM_CORES && COLS_COR.some(function (c) {
+        return (Number(it[c]) || 0) !== cores[c];
+      });
+      if (d === 0 && !mudouCor) { fecharSheets(); return; }
       var obs = $(id + 'QtdObs').value.trim();
 
       var ok = function (qtdFinal) {
@@ -561,7 +653,7 @@ window.ModuloContagem = (function () {
       };
 
       var api = nv();
-      if (!api) { aplicarLocal(it.codigo, nova, d, obs); semNuvem(); ok(nova); return; }
+      if (!api) { aplicarLocal(it.codigo, nova, d, obs, cores); semNuvem(); ok(nova); return; }
 
       var btn = $(id + 'QtdSalvar');
       var rotulo = btn.textContent;
@@ -569,12 +661,12 @@ window.ModuloContagem = (function () {
       btn.textContent = 'Gravando na nuvem...';
 
       /* absoluto: "a quantidade contada agora é esta" */
-      api.definir(it.codigo, nova, true, P.operador(), obs)
+      api.definir(it.codigo, nova, true, P.operador(), obs, cores)
         .then(function (r) {
           var novoItem = itemDaResposta(r);
           var final = novoItem ? Number(novoItem.qtd) : nova;
           upsertLocal(novoItem);
-          aplicarLocal(it.codigo, final, final - it.qtd, obs);
+          aplicarLocal(it.codigo, final, final - it.qtd, obs, cores);
           statusNuvem();
           ok(final);
         })
@@ -763,7 +855,8 @@ window.ModuloContagem = (function () {
             [r.codigo, 'ZERAGEM', r.qtd, 0, agora, op, 'zeragem geral (contagem cíclica)']
           );
         });
-        db.run('UPDATE ' + TAB + ' SET qtd = 0');
+        db.run('UPDATE ' + TAB + ' SET qtd = 0' +
+          COLS_COR.map(function (c) { return ', ' + c + ' = 0'; }).join(''));
         salvar(true);
         P.vibrar([60, 50, 60]);
         toast(n + ' item(ns) zerado(s). Pode começar a contagem.', 'ok');
@@ -830,15 +923,22 @@ window.ModuloContagem = (function () {
       }
 
       el.innerHTML = linhas.map(function (r) {
+        /* ex.: "1 preto fosco ; 2 ônix" - só as cores contadas */
+        var det = !TEM_CORES ? '' : CORES.filter(function (c) { return (Number(r[c.col]) || 0) > 0; })
+          .map(function (c) { return P.fmtNum(Number(r[c.col])) + ' ' + c.nome; }).join(' ; ');
+
         return '<div class="li' + (r.qtd > 0 ? ' contado' : '') + '">' +
           '<div class="li-main" data-' + id + 'abrir="' + esc(r.codigo) + '">' +
             '<span class="li-code">' + esc(r.codigo) + '</span>' +
             '<span class="li-nome">' + esc(r.nome) + '</span>' +
+            (det ? '<span class="li-sub">' + esc(det) + '</span>' : '') +
           '</div>' +
           '<div class="li-cont">' +
-            '<button class="qty-btn" data-' + id + 'passo2="-1" data-cod="' + esc(r.codigo) + '" type="button">-</button>' +
+            (TEM_CORES ? '' :
+              '<button class="qty-btn" data-' + id + 'passo2="-1" data-cod="' + esc(r.codigo) + '" type="button">-</button>') +
             '<button class="li-qtd" data-' + id + 'abrir="' + esc(r.codigo) + '" type="button">' + P.fmtNum(r.qtd) + '</button>' +
-            '<button class="qty-btn" data-' + id + 'passo2="1" data-cod="' + esc(r.codigo) + '" type="button">+</button>' +
+            (TEM_CORES ? '' :
+              '<button class="qty-btn" data-' + id + 'passo2="1" data-cod="' + esc(r.codigo) + '" type="button">+</button>') +
           '</div>' +
         '</div>';
       }).join('');
@@ -1036,6 +1136,18 @@ window.ModuloContagem = (function () {
 
       /* sheet de quantidade */
       $(id + 'QtdInput').addEventListener('input', previaQtd);
+      if (TEM_CORES) {
+        P.qsa('.' + id + '-cor').forEach(function (inp) {
+          inp.addEventListener('input', somarCores);
+        });
+        P.qsa('[data-' + id + 'corpasso]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var inp = $(id + 'Cor_' + b.getAttribute('data-' + id + 'cor'));
+            inp.value = Math.max(0, num(inp.value) + parseFloat(b.getAttribute('data-' + id + 'corpasso')));
+            somarCores();
+          });
+        });
+      }
       P.qsa('[data-' + id + 'passo]').forEach(function (b) {
         b.addEventListener('click', function () {
           var v = num($(id + 'QtdInput').value) + parseFloat(b.getAttribute('data-' + id + 'passo'));

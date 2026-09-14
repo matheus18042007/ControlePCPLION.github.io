@@ -858,6 +858,11 @@ window.ModuloFaltas = (function () {
         b.addEventListener('click', fecharSheets);
       });
 
+      /* clicar no fundo escuro fecha - as sheets deste modulo nascem depois do init do app */
+      [$(id + 'SheetNova'), $(id + 'SheetZerar')].forEach(function (w) {
+        w.addEventListener('click', function (ev) { if (ev.target === w) fecharSheets(); });
+      });
+
       /* lista: delegação, porque as linhas são recriadas a cada render */
       var lista = $(id + 'Lista');
       /* clicar no componente abre a linha, revelando o "Suprida" */
