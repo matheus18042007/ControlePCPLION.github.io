@@ -47,14 +47,15 @@ window.ModuloContagem = (function () {
        porque a sincronização apaga e regrava a tabela de itens. */
     var TEM_FOTO = (id === 'carenagem');
     /* contagem por cor: só Carenagens VG. A qtd do item passa a ser a soma
-       das 5 cores, gravadas em uma coluna por cor (local e na nuvem). */
+       dos tipos abaixo, gravados em uma coluna por tipo (local e na nuvem). */
     var TEM_CORES = (id === 'carenagem');
     var CORES = [
       { col: 'qtd_onix', nome: 'Ônix' },
       { col: 'qtd_preto_fosco', nome: 'Preto fosco' },
       { col: 'qtd_black_piano', nome: 'Black piano' },
       { col: 'qtd_cinza', nome: 'Cinza' },
-      { col: 'qtd_champanhe', nome: 'Champanhe' }
+      { col: 'qtd_champanhe', nome: 'Champanhe' },
+      { col: 'qtd_3d', nome: 'Adesivada 3D' }
     ];
 
     var db = null, saveTimer = null, montado = false, promessa = null;

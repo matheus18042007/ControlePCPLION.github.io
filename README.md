@@ -4,7 +4,7 @@ PWA (app instalável) de controle de chão de fábrica. Roda 100% no navegador �
 HTML + CSS + JavaScript puro, sem framework, sem build. Funciona offline e
 sincroniza com o Supabase quando tem internet.
 
-Versão atual: **1.28.0** (`APP_VERSION` em `js/app.js`, `CACHE_VERSION` em `sw.js`).
+Versão atual: **1.31.0** (`APP_VERSION` em `js/app.js`, `CACHE_VERSION` em `sw.js`).
 
 ---
 
@@ -41,8 +41,10 @@ css/styles.css      Estilo único (claro/escuro)
 sw.js               Service Worker — cache offline (ARQUIVOS + CACHE_VERSION)
 manifest.json       PWA: ícones, nome, cor
 
-js/app.js           Núcleo: banco SQLite, hub, telas do Almoxarifado,
-                    scanner QR, import/export CSV e .db
+js/base.js          Base compartilhada: IndexedDB, SQLite, CSV, datas
+js/modulos.js       Registro dos módulos (hub) — id, ícone, view inicial
+js/app.js           Núcleo: hub, telas do Almoxarifado, scanner QR,
+                    import/export CSV e .db
 js/contagem.js      Motor genérico dos módulos de contagem (quadro, carenagem)
 js/eficiencia.js    Módulo Eficiência VG (folha do dia + histórico)
 js/faltas.js        Módulo Faltas VG (registro de faltas + base de componentes)
@@ -50,23 +52,24 @@ js/push.js          Inscrição do aparelho em notificações (VAPID) — só o 
 js/nuvem.js         Camada Supabase (REST/PostgREST) — um namespace por tipo de módulo
 js/auth.js          Login e cofre AES-GCM da config da nuvem
 js/usuarios.js      Cofre cifrado — GERADO por admin.html, não editar à mão
+js/banco.js         Módulo Banco de Dados (restrito): backup .db/.csv/.sql de
+                    todos os módulos, estrutura das tabelas e config da nuvem
 
 supabase/functions/faltas-notificar/   Edge Function que dispara o push
 vendor/             sql-wasm (SQLite), html5-qrcode
-tools/gerar_icones.ps1   Gera os ícones a partir da logo
-exemplo_itens.csv   Modelo de importação do Almoxarifado
+icons/              Ícones do PWA (192, 512, maskable, apple-touch)
 ```
 
 ### SQL (rodar no SQL Editor do Supabase, nesta ordem)
 
 ```
-supabase.sql                  Almoxarifado
-supabase_contagem.sql         Quadros + Carenagens
-supabase_eficiencia.sql       Eficiência VG
-supabase_eficiencia_ordem.sql Eficiência VG — coluna "ordem"
-supabase_fotos.sql            Foto de referência dos itens de contagem
-supabase_faltas.sql           Faltas VG + base de componentes + push
+supabase/schema.sql             Schema completo (todos os módulos)
+supabase/patch_almoxarifado.sql Correção do registrar_movimentacao
+supabase/patch_faltas.sql       Ajustes do módulo Faltas VG
 ```
+
+`schema.sql` é o arquivo único e atual: rodar ele já cria tudo. Os `patch_*`
+só servem para bancos antigos, criados antes dessas correções.
 
 Todos são idempotentes: podem ser rodados de novo sem apagar dados.
 
@@ -251,7 +254,7 @@ gere o novo `js/usuarios.js` e publique.
 ## Publicar uma atualização
 
 1. mudar `APP_VERSION` em `js/app.js`;
-2. mudar `CACHE_VERSION` em `sw.js` (mesmo número, ex. `pcp-lion-v1.28.0`);
+2. mudar `CACHE_VERSION` em `sw.js` (mesmo número, ex. `pcp-lion-v1.31.0`);
 3. se criou arquivo novo, adicionar em `ARQUIVOS` no `sw.js`;
 4. commit + push (GitHub Pages).
 
