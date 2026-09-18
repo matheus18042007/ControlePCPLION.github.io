@@ -312,7 +312,9 @@ window.ModuloContagem = (function () {
         '  <div class="card">',
         '    <h3>Exportar</h3>',
         '    <p class="muted small">Gere o arquivo para levar ao PC (pasta <em>Downloads</em>).</p>',
-        '    <button id="' + id + 'ExportCsv" class="btn primary block" type="button">⬇ Exportar itens (.csv)</button>',
+        '    <button id="' + id + 'Relatorio" class="btn primary block" type="button">📋 Relatório de contagem (.csv)</button>',
+        '    <p class="muted small">Cod, Nome e Qtd. Itens zerados não entram.</p>',
+        '    <button id="' + id + 'ExportCsv" class="btn ghost block" type="button">⬇ Exportar itens (.csv)</button>',
         '    <button id="' + id + 'ExportCsvMov" class="btn ghost block" type="button">⬇ Exportar movimentações (.csv)</button>',
         '    <button id="' + id + 'ExportDb" class="btn ghost block" type="button">⬇ Exportar banco (.db SQLite)</button>',
         '  </div>',
@@ -1254,6 +1256,16 @@ window.ModuloContagem = (function () {
         if (!f) return;
         P.lerTexto(f, function (txt) { importarCsv(txt); });
         ev.target.value = '';
+      });
+      $(id + 'Relatorio').addEventListener('click', function () {
+        var linhas = sel('SELECT codigo, nome, qtd FROM ' + TAB +
+                         ' WHERE COALESCE(qtd,0) <> 0 ORDER BY codigo');
+        if (!linhas.length) { toast('Nenhum item com quantidade contada', 'err'); return; }
+        var txt = P.csvDe(['Cod', 'Nome', 'Qtd'], linhas.map(function (r) {
+          return { Cod: r.codigo, Nome: r.nome, Qtd: r.qtd };
+        }));
+        P.baixar(new Blob([txt], { type: 'text/csv;charset=utf-8' }), id + '_relatorio_' + P.carimbo() + '.csv');
+        toast('Relatório gerado (pasta Downloads)', 'ok');
       });
       $(id + 'ExportCsv').addEventListener('click', function () {
         var cols = ['codigo', 'nome', 'qtd', 'data_cadastro'];
