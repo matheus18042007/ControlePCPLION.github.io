@@ -18,7 +18,7 @@ o outro.
 |---|---|---|---|---|
 | 📦 Almoxarifado PBA | `almox` | Entrada/saída de estoque por QR Code, itens, movimentações, estoque baixo | `pcp_almox` | `itens`, `movimentacoes`, `exclusoes` |
 | 🔢 Contagem de Quadros VG | `quadro` | Contagem cíclica de quadros na produção | `pcp_quadro` | `contagem_itens`, `contagem_movimentacoes` (modulo=`quadro`) |
-| 🛡️ Carenagens VG | `carenagem` | Contagem cíclica de carenagens | `pcp_carenagem` | idem, modulo=`carenagem` |
+| 🛡️ Carenagens VG | `carenagem` | Contagem cíclica de carenagens, contada por cor, com foto de referência | `pcp_carenagem` | idem, modulo=`carenagem` (+ `contagem_fotos`) |
 | ⏱️ Eficiência VG | `eficiencia` | Faltas e horas extras do dia, por setor. Histórico de 10 dias | `pcp_eficiencia` | `eficiencia_colaboradores`, `eficiencia_dias` |
 | ⚠️ Faltas VG | `faltas` | Registro de faltas de peças, com base de componentes e aviso por push | `pcp_faltas` | `faltas`, `faltas_componentes` |
 
@@ -130,6 +130,43 @@ Dois botões, ambos `.csv`:
 
 ---
 
+## Contagem por cor (contagem)
+
+Item de contagem pode ser contado **por cor** em vez de um número só. Hoje só o
+módulo **Carenagens VG** liga isso (`TEM_CORES = (id === 'carenagem')` em
+`js/contagem.js`); pra ligar em outro módulo é mexer nessa linha.
+
+As cores ficam na lista `CORES` logo abaixo, uma coluna por tipo:
+
+| Coluna | Nome na tela |
+|---|---|
+| `qtd_onix` | Ônix |
+| `qtd_preto_fosco` | Preto fosco |
+| `qtd_black_piano` | Black piano |
+| `qtd_cinza` | Cinza |
+| `qtd_champanhe` | Champanhe |
+| `qtd_3d` | Adesivada 3D |
+
+- **A `qtd` do item passa a ser a soma das cores.** Você digita as cores, o app
+  soma e grava a soma em `qtd`. Todo o resto do módulo (lista, relatório,
+  estoque, movimentações) continua lendo `qtd` normalmente.
+- **Banco local:** as colunas entram no `CREATE TABLE`. Banco antigo (criado
+  antes das cores) é migrado sozinho no `abrirBanco()` — um `ALTER TABLE ... ADD
+  COLUMN` por coluna que faltar. Não precisa apagar nada.
+- **Nuvem:** o app manda as cores como um objeto no `p_cores` da RPC
+  `contagem_definir` (`{ qtd_onix: 2, ... }`); módulo sem cor manda `null`. Esse
+  RPC e as colunas precisam existir no Supabase — não tem `.sql` aqui no repo
+  cobrindo isso.
+- **Zerar** (contagem cíclica) zera as cores junto com a `qtd`.
+- Na lista, o item mostra as cores contadas embaixo do nome (só as diferentes de
+  zero). Mudar só a cor, sem mudar o total, ainda conta como alteração e é
+  gravado.
+- **Os `.csv` não levam as cores**: relatório (`Cod;Nome;Qtd`) e exportação de
+  itens (`codigo;nome;qtd;data_cadastro`) saem só com o total. Pra ver cor por
+  cor hoje é na tela ou no `.db`.
+
+---
+
 ## Foto de referência (contagem)
 
 Item de contagem pode ter **uma foto**, pra quem está no chão de fábrica
@@ -138,6 +175,10 @@ reconhecer a peça. Hoje só o módulo **Carenagens VG** liga isso
 módulo é mexer nessa linha.
 
 - Aparece na **tela do item** e no **cadastro** (adicionar / remover).
+- Tocar na foto abre o **visor em tela cheia**: pinça com 2 dedos ou roda do
+  mouse pra dar zoom (até 6x), toque duplo alterna 1x / 2.5x, 1 dedo arrasta
+  quando está com zoom. Fecha no "← Voltar", no `Esc` e no botão voltar do
+  Android.
 - Guardada em base64 (data URL), já reduzida pelo app (~100 KB).
 - **Local:** IndexedDB, chave `foto_<codigo>` — fora do SQLite **de propósito**,
   porque o sync apaga e regrava a tabela de itens e levaria a foto junto.
