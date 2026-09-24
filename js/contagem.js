@@ -79,7 +79,7 @@ window.ModuloContagem = (function () {
       '  qtd_final REAL,',
       '  data_hora DATETIME NOT NULL,',
       '  usuario TEXT,',
-      '  observacao TEXT',
+      '  observacao TEXT' + (TEM_CORES ? ', cores TEXT' : ''),
       ');',
       'CREATE INDEX IF NOT EXISTS ix_' + id + '_mov_item ON ' + MOV + '(codigo_item);',
       'CREATE INDEX IF NOT EXISTS ix_' + id + '_mov_data ON ' + MOV + '(data_hora);'
@@ -101,6 +101,13 @@ window.ModuloContagem = (function () {
           db.run('ALTER TABLE ' + TAB + ' ADD COLUMN ' + c.col + ' REAL NOT NULL DEFAULT 0');
           faltou = true;
         });
+        /* histórico antigo: coluna com as cores de cada movimentação (JSON) */
+        var temMov = {};
+        K.sel('PRAGMA table_info(' + MOV + ')').forEach(function (c) { temMov[c.name] = true; });
+        if (!temMov.cores) {
+          db.run('ALTER TABLE ' + MOV + ' ADD COLUMN cores TEXT');
+          faltou = true;
+        }
         if (faltou) salvar(true);
       });
     }
@@ -130,6 +137,18 @@ window.ModuloContagem = (function () {
     function coresDe(o) {
       return COLS_COR.map(function (c) { return Number(o && o[c]) || 0; });
     }
+    /* ex.: "1 Preto fosco ; 2 Ônix" - só as cores diferentes de zero */
+    function textoCores(o) {
+      if (!TEM_CORES || !o) return '';
+      return CORES.filter(function (c) { return (Number(o[c.col]) || 0) > 0; })
+        .map(function (c) { return P.fmtNum(Number(o[c.col])) + ' ' + c.nome; }).join(' ; ');
+    }
+    /* cores da movimentação: vem da nuvem como objeto, do SQLite como texto */
+    function coresMov(v) {
+      if (!v) return null;
+      if (typeof v === 'object') return v;
+      try { return JSON.parse(v); } catch (e) { return null; }
+    }
 
     /* substitui o cache local pelo conteúdo da nuvem */
     function gravarCache(dados) {
@@ -144,11 +163,14 @@ window.ModuloContagem = (function () {
               .concat(coresDe(it)));
         });
         dados.movimentacoes.forEach(function (m) {
+          var cm = coresMov(m.cores);
           db.run('INSERT INTO ' + MOV +
-            ' (id,codigo_item,tipo,quantidade,qtd_final,data_hora,usuario,observacao) VALUES (?,?,?,?,?,?,?,?)',
+            ' (id,codigo_item,tipo,quantidade,qtd_final,data_hora,usuario,observacao' +
+            (TEM_CORES ? ',cores' : '') + ') VALUES (?,?,?,?,?,?,?,?' + (TEM_CORES ? ',?' : '') + ')',
             [m.id, m.codigo_item, m.tipo, Number(m.quantidade) || 0,
              m.qtd_final == null ? null : Number(m.qtd_final),
-             P.paraLocal(m.data_hora), m.usuario || null, m.observacao || null]);
+             P.paraLocal(m.data_hora), m.usuario || null, m.observacao || null]
+              .concat(TEM_CORES ? [cm ? JSON.stringify(cm) : null] : []));
         });
         db.run('COMMIT');
       } catch (e) {
@@ -625,10 +647,13 @@ window.ModuloContagem = (function () {
       } else {
         db.run('UPDATE ' + TAB + ' SET qtd = ? WHERE codigo = ?', [qtdFinal, codigo]);
       }
+      var comCor = TEM_CORES && cores;
       db.run(
-        'INSERT INTO ' + MOV + ' (codigo_item,tipo,quantidade,qtd_final,data_hora,usuario,observacao) VALUES (?,?,?,?,?,?,?)',
+        'INSERT INTO ' + MOV + ' (codigo_item,tipo,quantidade,qtd_final,data_hora,usuario,observacao' +
+          (comCor ? ',cores' : '') + ') VALUES (?,?,?,?,?,?,?' + (comCor ? ',?' : '') + ')',
         [codigo, delta > 0 ? 'ENTRADA' : 'SAIDA', Math.abs(delta), qtdFinal,
          P.agoraISO(), P.operador() || null, obs || null]
+          .concat(comCor ? [JSON.stringify(cores)] : [])
       );
       salvar(true);
     }
@@ -926,9 +951,7 @@ window.ModuloContagem = (function () {
       }
 
       el.innerHTML = linhas.map(function (r) {
-        /* ex.: "1 preto fosco ; 2 ônix" - só as cores contadas */
-        var det = !TEM_CORES ? '' : CORES.filter(function (c) { return (Number(r[c.col]) || 0) > 0; })
-          .map(function (c) { return P.fmtNum(Number(r[c.col])) + ' ' + c.nome; }).join(' ; ');
+        var det = textoCores(r);
 
         return '<div class="li' + (r.qtd > 0 ? ' contado' : '') + '">' +
           '<div class="li-main" data-' + id + 'abrir="' + esc(r.codigo) + '">' +
@@ -968,6 +991,7 @@ window.ModuloContagem = (function () {
       el.innerHTML = linhas.map(function (m) {
         var cls = m.tipo === 'ENTRADA' ? 'e' : (m.tipo === 'ZERAGEM' ? 'z' : 's');
         var sinal = m.tipo === 'ENTRADA' ? '+' : '-';
+        var det = textoCores(coresMov(m.cores));
         return '<div class="li">' +
           '<div class="li-main">' +
             '<span class="li-code">' + esc(m.codigo_item) + '</span>' +
@@ -976,6 +1000,7 @@ window.ModuloContagem = (function () {
               (m.usuario ? ' • ' + esc(m.usuario) : '') +
               (m.observacao ? ' • ' + esc(m.observacao) : '') +
             '</span>' +
+            (det ? '<span class="li-sub">Cores: ' + esc(det) + '</span>' : '') +
           '</div>' +
           '<div class="li-saldo-txt">' +
             '<span class="badge ' + cls + '">' + (m.tipo === 'ZERAGEM' ? 'zerou' : sinal + P.fmtNum(m.quantidade)) + '</span>' +
