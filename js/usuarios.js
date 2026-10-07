@@ -7,7 +7,7 @@
    este arquivo nao serve para nada.
 
    Usuarios: Matheus movio, Alan Marques, joao victor, Kauã, Gabriel B., Gabriel Kirschner, cesar
-   Gerado em: 07/10/2026, 10:31:28
+   Gerado em: 07/10/2026, 10:36:23
    ========================================================= */
 var COFRE = {
   "v": 1,
@@ -106,10 +106,10 @@ var COFRE = {
     {
       "login": "cesar",
       "nome": "cesar",
-      "salt": "mKZ1mpMQ0SvqlB85bzqpoQ==",
+      "salt": "DWVUA+Cc7spVMLWiZr6udA==",
       "env": {
-        "iv": "kaS6isPd/MN5fLKi",
-        "ct": "tGaOJFxvsNhWihQ9rqFptT1MLSqK4EhpeAdDLV4DZup1clZOpS7HcdL3XhvwEBdw"
+        "iv": "D3dEo+z/8/oJ0/iI",
+        "ct": "ouZZqDTfMW8DDSiJqegeQhX5LtIJu2Rwbz32r/pGtR4IuxIcMlQpirVzpqV8J2OO"
       },
       "mods": [
         "almox",
