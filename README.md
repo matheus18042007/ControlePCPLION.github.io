@@ -4,7 +4,7 @@ PWA (app instalável) de controle de chão de fábrica. Roda 100% no navegador �
 HTML + CSS + JavaScript puro, sem framework, sem build. Funciona offline e
 sincroniza com o Supabase quando tem internet.
 
-Versão atual: **1.31.3** (`APP_VERSION` em `js/app.js`, `CACHE_VERSION` em `sw.js`).
+Versão atual: **2.0** (`APP_VERSION` em `js/app.js`, `CACHE_VERSION` em `sw.js`).
 
 ---
 
@@ -17,16 +17,18 @@ o outro.
 | Módulo | Id | O que faz | Banco local | Tabelas no Supabase |
 |---|---|---|---|---|
 | 📦 Almoxarifado PBA | `almox` | Entrada/saída de estoque por QR Code, itens, movimentações, estoque baixo | `pcp_almox` | `itens`, `movimentacoes`, `exclusoes` |
-| 🔢 Contagem de Máquinas VG | `quadro` | Contagem cíclica de máquinas na produção | `pcp_quadro` | `contagem_itens`, `contagem_movimentacoes` (modulo=`quadro`) |
+| 🔢 Contagem de Quadros VG | `quadro` | Contagem cíclica de quadros na produção (contagem simples) | `pcp_quadro` | `contagem_itens`, `contagem_movimentacoes` (modulo=`quadro`) |
+| 🏋️ Contagem de Máquinas VG | `maquinas` | Contagem cíclica de máquinas, por combinação de cor do quadro e cor da articulação | `pcp_maquinas` | idem, modulo=`maquinas` (+ `contagem_combos`, `contagem_cores_opcoes`) |
 | 🛡️ Carenagens VG | `carenagem` | Contagem cíclica de carenagens, contada por cor, com foto de referência | `pcp_carenagem` | idem, modulo=`carenagem` (+ `contagem_fotos`) |
 | ⏱️ Eficiência VG | `eficiencia` | Faltas e horas extras do dia, por setor. Histórico de 10 dias | `pcp_eficiencia` | `eficiencia_colaboradores`, `eficiencia_dias` |
 | ⚠️ Faltas VG | `faltas` | Registro de faltas de peças, com base de componentes e aviso por push | `pcp_faltas` | `faltas`, `faltas_componentes` |
+| ⚙️ Banco de Dados | `banco` | Backup de todos os módulos, estrutura das tabelas, nuvem e notificações (módulo restrito) | nenhum próprio (lê os bancos dos outros módulos) | todas, só leitura (backup em CSV) |
 
 ### Como adicionar um módulo novo
 
 1. criar as `<section class="view" data-modulo="xxx">` no `index.html` e os
    `<button class="tab" data-modulo="xxx">`;
-2. registrar o módulo em `MODULOS` (`js/app.js`, ~L347);
+2. registrar o módulo em `MODULOS` (`js/modulos.js`);
 3. se for do tipo `contagem`, **nada mais precisa ser escrito** — o motor
    genérico `js/contagem.js` monta tela e banco a partir do `cfg`.
 
@@ -45,7 +47,7 @@ js/base.js          Base compartilhada: IndexedDB, SQLite, CSV, datas
 js/modulos.js       Registro dos módulos (hub) — id, ícone, view inicial
 js/app.js           Núcleo: hub, telas do Almoxarifado, scanner QR,
                     import/export CSV e .db
-js/contagem.js      Motor genérico dos módulos de contagem (quadro, carenagem)
+js/contagem.js      Motor genérico dos módulos de contagem (quadro, maquinas, carenagem)
 js/eficiencia.js    Módulo Eficiência VG (folha do dia + histórico)
 js/faltas.js        Módulo Faltas VG (registro de faltas + base de componentes)
 js/push.js          Inscrição do aparelho em notificações (VAPID) — só o Faltas usa
@@ -53,25 +55,46 @@ js/nuvem.js         Camada Supabase (REST/PostgREST) — um namespace por tipo d
 js/auth.js          Login e cofre AES-GCM da config da nuvem
 js/usuarios.js      Cofre cifrado — GERADO por admin.html, não editar à mão
 js/banco.js         Módulo Banco de Dados (restrito): backup .db/.csv/.sql de
-                    todos os módulos, estrutura das tabelas e config da nuvem
+                    todos os módulos, estrutura das tabelas, nuvem e push
 
 supabase/functions/faltas-notificar/   Edge Function que dispara o push
 vendor/             sql-wasm (SQLite), html5-qrcode
 icons/              Ícones do PWA (192, 512, maskable, apple-touch)
 ```
 
-### SQL (rodar no SQL Editor do Supabase, nesta ordem)
+### SQL (rodar no SQL Editor do Supabase)
 
-```
-supabase/schema.sql             Schema completo (todos os módulos)
-supabase/patch_almoxarifado.sql Correção do registrar_movimentacao
-supabase/patch_faltas.sql       Ajustes do módulo Faltas VG
-```
+Hoje a pasta `supabase/` tem só `patch_*.sql` (não existe `schema.sql` no
+repositório: o schema base já está no projeto do Supabase). Todos são
+idempotentes e podem ser rodados de novo sem apagar dados.
 
-`schema.sql` é o arquivo único e atual: rodar ele já cria tudo. Os `patch_*`
-só servem para bancos antigos, criados antes dessas correções.
+| Arquivo | Para que serve |
+|---|---|
+| `patch_almoxarifado.sql` | Correção do `registrar_movimentacao` (saída grava quantidade positiva, sinal só no tipo) |
+| `patch_faltas.sql` | Ajustes da tabela `faltas` (colunas que faltavam, como `suprida_por`) |
+| `patch_carenagem_cores.sql` | Coluna `qtd_3d` (Adesivada 3D) em `contagem_itens` e `contagem_definir` passando a gravar essa cor |
+| `patch_historico_cores.sql` | Coluna `cores` em `contagem_movimentacoes`, `contagem_definir` gravando as cores no histórico, e views `carenagens` / `movimentacoes_carenagens` |
+| `patch_maquinas_cores.sql` | Cor do quadro e da articulação nas máquinas (ver abaixo) |
+| `patch_maquinas_modulo.sql` | Separa `maquinas` de `quadro` (módulo próprio) |
+| `patch_maquinas_copiar.sql` | Cópia única do que foi contado como máquina em `quadro` para `maquinas` |
 
-Todos são idempotentes: podem ser rodados de novo sem apagar dados.
+**Ordem para as máquinas:** `patch_maquinas_cores.sql` primeiro, depois
+`patch_maquinas_modulo.sql`, e por fim (opcional, uma vez só)
+`patch_maquinas_copiar.sql`.
+
+- `patch_maquinas_cores.sql` cria as tabelas `contagem_combos` e
+  `contagem_cores_opcoes`, a coluna de cor no histórico, as políticas de leitura
+  (RLS), as RPCs `contagem_definir_combo`, `contagem_zerar_combos`,
+  `contagem_opcao_adicionar` e `contagem_opcao_remover`, a função/trigger
+  `trg_contagem_itens_apaga_combos` (excluir o item leva as combinações junto) e
+  a view `maquinas_combos` (uma linha por máquina + combinação).
+- `patch_maquinas_modulo.sql` insere as opções de cor do módulo `maquinas`,
+  recria a view `maquinas_combos` para ele e devolve o `quadro` a ser contagem
+  sem cores. O que foi contado antes como máquina continua em `quadro`; o
+  módulo `maquinas` começa vazio.
+- `patch_maquinas_copiar.sql` copia os dados de `quadro` para `maquinas`, tabela
+  por tabela, só se o destino estiver vazio (rodar de novo é seguro). O `quadro`
+  não é alterado.
 
 ---
 
@@ -98,7 +121,8 @@ alfabética. A coluna `ordem` (integer) existe em `eficiencia_colaboradores` e e
 `eficiencia_dias`; os setores também são ordenados pelo menor `ordem` dos seus
 colaboradores. Reimportar a planilha reordena sem perder marcações.
 
-Isso é o que o `supabase_eficiencia_ordem.sql` instala:
+A migração da `ordem` (o arquivo `supabase_eficiencia_ordem.sql` **não está** em
+`supabase/` hoje, então não dá para rodar a partir deste repositório) consiste em:
 
 - `alter table` adicionando `ordem` nas duas tabelas + índice;
 - `drop function` da versão antiga de `eficiencia_cadastrar` (6 argumentos) e
@@ -134,7 +158,9 @@ Dois botões, ambos `.csv`:
 
 Item de contagem pode ser contado **por cor** em vez de um número só. Hoje só o
 módulo **Carenagens VG** liga isso (`TEM_CORES = (id === 'carenagem')` em
-`js/contagem.js`); pra ligar em outro módulo é mexer nessa linha.
+`js/contagem.js`); pra ligar em outro módulo é mexer nessa linha. A **Contagem
+de Máquinas VG** não usa este modelo: ela conta por combinação de duas cores
+(ver a seção própria abaixo).
 
 As cores ficam na lista `CORES` logo abaixo, uma coluna por tipo:
 
@@ -154,9 +180,10 @@ As cores ficam na lista `CORES` logo abaixo, uma coluna por tipo:
   antes das cores) é migrado sozinho no `abrirBanco()` — um `ALTER TABLE ... ADD
   COLUMN` por coluna que faltar. Não precisa apagar nada.
 - **Nuvem:** o app manda as cores como um objeto no `p_cores` da RPC
-  `contagem_definir` (`{ qtd_onix: 2, ... }`); módulo sem cor manda `null`. Esse
-  RPC e as colunas precisam existir no Supabase — não tem `.sql` aqui no repo
-  cobrindo isso.
+  `contagem_definir` (`{ qtd_onix: 2, ... }`); módulo sem cor manda `null`. A
+  coluna `qtd_3d` vem do `patch_carenagem_cores.sql`, e a coluna `cores` do
+  histórico do `patch_historico_cores.sql`. As demais colunas de cor e a RPC base
+  já existem no projeto (não há `schema.sql` no repositório).
 - **Zerar** (contagem cíclica) zera as cores junto com a `qtd`.
 - Na lista, o item mostra as cores contadas embaixo do nome (só as diferentes de
   zero). Mudar só a cor, sem mudar o total, ainda conta como alteração e é
@@ -164,6 +191,41 @@ As cores ficam na lista `CORES` logo abaixo, uma coluna por tipo:
 - **Os `.csv` não levam as cores**: relatório (`Cod;Nome;Qtd`) e exportação de
   itens (`codigo;nome;qtd;data_cadastro`) saem só com o total. Pra ver cor por
   cor hoje é na tela ou no `.db`.
+
+---
+
+## Contagem de Máquinas VG
+
+Módulo `maquinas` (ícone de halter, banco local `pcp_maquinas`, tabelas locais
+`maquinas` / `movimentacoes_maquinas`), independente da Contagem de Quadros VG
+(`quadro`, contagem simples com + / - na lista, contagem rápida e folha de
+quantidade). Ligado por `combos: true` em `js/modulos.js`.
+
+Cada máquina é contada por **combinação** de **cor do quadro** e **cor da
+articulação**:
+
+- Na lista, a linha mostra só a **quantidade somada** da máquina e um botão
+  **+** (sem menos e sem contagem rápida).
+- O **+** abre a folha com os dois dropdowns lado a lado (cor do quadro e cor da
+  articulação) e a quantidade a contar. Os dropdowns começam **vazios** toda vez
+  que a folha abre.
+- Combinações **iguais** na mesma máquina são agrupadas (a quantidade soma);
+  combinações **diferentes** viram linhas separadas.
+- Abaixo dos botões a folha lista as combinações já contadas daquela máquina;
+  tocar em uma preenche os dropdowns para corrigir.
+- A `qtd` do item é a soma das combinações (mais o que tiver sido contado sem cor).
+- **Cores disponíveis:** Onix, Preto fosco, Black piano, Cinza, Champanhe e
+  Adesivada 3D. As listas são editáveis em **Configurações** (adicionar /
+  remover), uma lista para o quadro e outra para a articulação.
+- **Relatório (.csv):** uma linha por máquina + combinação, com as colunas
+  `Cod;Nome;Quadro;Articulacao;Qtd;Total`. `Total` é o total da máquina,
+  repetido em cada linha dela (não há linha de total separada). O que foi
+  contado sem cor entra como `Sem cor` em Quadro e Articulacao.
+- **Local:** tabelas `cmb_maquinas` (combinações) e `opc_maquinas` (opções dos
+  dropdowns) no SQLite do módulo.
+- **Nuvem:** `contagem_combos` e `contagem_cores_opcoes`, via as RPCs
+  `contagem_definir_combo`, `contagem_zerar_combos`, `contagem_opcao_adicionar`
+  e `contagem_opcao_remover`. Os SQL estão em `supabase/` (ordem na seção SQL).
 
 ---
 
@@ -186,6 +248,31 @@ módulo é mexer nessa linha.
   também separada de `contagem_itens` pelo mesmo motivo. RLS aberta (select /
   insert / update / delete para `anon` e `authenticated`), sem função
   `security definer` — é a exceção da regra abaixo.
+
+---
+
+## Banco de Dados
+
+Módulo `banco` (`js/banco.js`), restrito: cada usuário do cofre pode ter uma
+lista de módulos liberados, e o Banco de Dados só aparece para quem tem ele
+nessa lista. Existe porque cada módulo tem o **seu** SQLite em um IndexedDB
+próprio, então o backup de um módulo sozinho não pega o resto. Três abas:
+
+- **Backup:**
+  - *Backup da nuvem:* **Baixar TUDO** gera um `.csv` por tabela do Supabase
+    (`;` como separador), em downloads seguidos. Inclui `contagem_fotos`,
+    `contagem_combos` e `contagem_cores_opcoes`. Tabela que não existe no
+    servidor é pulada em silêncio.
+  - *O que existe hoje:* **Examinar bancos** varre os bancos locais de todos os
+    módulos (acordando cada motor antes) e lê a estrutura de cada um do
+    `sqlite_master` (tabelas, índices, linhas), sem schema fixo no código. O
+    backup local sai em `.db`, `.csv` e `.sql`; as fotos de referência (chaves
+    `foto_<codigo>` no IndexedDB) não vão dentro do `.db`.
+- **Nuvem:** endereço, chave anon (com botão Revelar), situação, teste de
+  conexão e id deste aparelho, mais a lista de usuários do cofre. Trocar
+  endereço ou chave é pelo `admin.html`, não aqui.
+- **Notificações:** estado do push neste aparelho (Ativar / Desativar) e a
+  chave VAPID pública.
 
 ---
 
@@ -265,6 +352,7 @@ Sincronia por REST (PostgREST), com paginação. Toda escrita passa por função
 
 - Almoxarifado: `registrar_movimentacao`, `cadastrar_item`, `excluir_item`
 - Contagem: `contagem_definir`, `contagem_cadastrar`, `contagem_zerar`, `contagem_excluir`
+- Contagem de Máquinas (combinações de cor): `contagem_definir_combo`, `contagem_zerar_combos`, `contagem_opcao_adicionar`, `contagem_opcao_remover`
 - Eficiência: `eficiencia_marcar`, `eficiencia_cadastrar`, `eficiencia_finalizar`, `eficiencia_excluir`
 - Faltas: `faltas_registrar`, `faltas_status`, `faltas_suprir`, `faltas_reabrir`, `faltas_excluir`, `push_registrar`, `push_remover`
 
@@ -295,7 +383,7 @@ gere o novo `js/usuarios.js` e publique.
 ## Publicar uma atualização
 
 1. mudar `APP_VERSION` em `js/app.js`;
-2. mudar `CACHE_VERSION` em `sw.js` (mesmo número, ex. `pcp-lion-v1.31.0`);
+2. mudar `CACHE_VERSION` em `sw.js` (mesmo número, ex. `pcp-lion-v2.0`);
 3. se criou arquivo novo, adicionar em `ARQUIVOS` no `sw.js`;
 4. commit + push (GitHub Pages).
 

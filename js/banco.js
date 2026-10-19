@@ -4,7 +4,8 @@
    Cada módulo do PCP LION tem o SEU banco SQLite, num
    IndexedDB próprio (js/base.js). Isso é de propósito, mas
    significa que "baixar o banco" pelo Almoxarifado baixa
-   só 2 das 10 tabelas do sistema.
+   só 2 das 14 tabelas locais do sistema (os módulos quadro e
+   maquinas são independentes, cada um com o seu banco).
 
    Aqui mora a visão de cima: varre TODOS os IndexedDB de
    TODOS os módulos, lê o sqlite_master de cada um (nada de
@@ -228,6 +229,7 @@ window.ModuloBanco = (function () {
     var TABELAS_NUVEM = [
       'itens', 'movimentacoes',
       'contagem_itens', 'contagem_movimentacoes', 'contagem_fotos',
+      'contagem_combos', 'contagem_cores_opcoes',
       'eficiencia_colaboradores', 'eficiencia_dias',
       'faltas', 'faltas_componentes', 'faltas_notif_estado',
       'push_subscriptions'

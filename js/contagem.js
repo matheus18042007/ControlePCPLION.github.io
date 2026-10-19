@@ -455,10 +455,12 @@ window.ModuloContagem = (function () {
           '    <input id="' + id + 'QtdInput" type="number" value="0" hidden>'
         ]).join('\n') : [
           (COMBOS ? [
-            '    <label class="lbl">Cor do quadro</label>',
-            '    <select id="' + id + 'CmbQ" class="inp"></select>',
-            '    <label class="lbl">Cor da articulação</label>',
-            '    <select id="' + id + 'CmbA" class="inp"></select>'
+            '    <div style="display:flex;gap:10px">',
+            '      <div style="flex:1;min-width:0"><label class="lbl">Cor do quadro</label>',
+            '      <select id="' + id + 'CmbQ" class="inp"></select></div>',
+            '      <div style="flex:1;min-width:0"><label class="lbl">Cor da articulação</label>',
+            '      <select id="' + id + 'CmbA" class="inp"></select></div>',
+            '    </div>'
           ].join('\n') + '\n' : '') +
           '    <label class="lbl">Quantidade contada' + (COMBOS ? ' (desta combinação)' : '') + '</label>',
           '    <div class="qty">',
@@ -1195,10 +1197,11 @@ window.ModuloContagem = (function () {
             (det ? '<span class="li-sub">' + esc(det) + '</span>' : '') +
           '</div>' +
           '<div class="li-cont">' +
-            (TEM_CORES ? '' :
+            ((TEM_CORES || COMBOS) ? '' :
               '<button class="qty-btn" data-' + id + 'passo2="-1" data-cod="' + esc(r.codigo) + '" type="button">-</button>') +
             '<button class="li-qtd" data-' + id + 'abrir="' + esc(r.codigo) + '" type="button">' + P.fmtNum(r.qtd) + '</button>' +
-            (TEM_CORES ? '' :
+            (TEM_CORES ? '' : COMBOS ?
+              '<button class="qty-btn" data-' + id + 'abrir="' + esc(r.codigo) + '" type="button">+</button>' :
               '<button class="qty-btn" data-' + id + 'passo2="1" data-cod="' + esc(r.codigo) + '" type="button">+</button>') +
           '</div>' +
         '</div>';

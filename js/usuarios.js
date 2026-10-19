@@ -28,6 +28,7 @@ var COFRE = {
       "mods": [
         "almox",
         "quadro",
+        "maquinas",
         "carenagem",
         "eficiencia",
         "faltas",
@@ -56,6 +57,7 @@ var COFRE = {
       },
       "mods": [
         "quadro",
+        "maquinas",
         "carenagem",
         "eficiencia",
         "faltas"
@@ -71,6 +73,7 @@ var COFRE = {
       },
       "mods": [
         "quadro",
+        "maquinas",
         "carenagem",
         "eficiencia",
         "faltas"
@@ -98,6 +101,7 @@ var COFRE = {
       },
       "mods": [
         "quadro",
+        "maquinas",
         "carenagem",
         "eficiencia",
         "faltas"
@@ -114,6 +118,7 @@ var COFRE = {
       "mods": [
         "almox",
         "quadro",
+        "maquinas",
         "carenagem",
         "eficiencia",
         "faltas"
