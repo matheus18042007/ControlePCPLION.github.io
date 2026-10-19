@@ -336,6 +336,55 @@ var Nuvem = (function () {
           p_aparelho: aparelho()
         },
         timeout: 30000
+      }).then(function (r) {
+        /* contagem_zerar nao conhece as combinacoes de cor; modulo sem
+           combinacao nao tem linha pra apagar, entao e inofensivo */
+        return req('/rpc/contagem_zerar_combos', {
+          method: 'POST', body: { p_modulo: modulo }, timeout: 30000
+        }).then(function () { return r; });
+      });
+    }
+
+    /* ---------- combinacoes (cor do quadro + cor da articulacao) ----------
+       Ver supabase/patch_maquinas_cores.sql. Quantidade por combinacao
+       em contagem_combos; a qtd total do item e ajustada pela RPC. */
+    function puxarCombos(aoProgredir) {
+      return puxarPaginado(
+        '/contagem_combos?select=*&modulo=eq.' + m + '&order=codigo', null, aoProgredir);
+    }
+
+    function definirCombo(codigo, corQuadro, corArticulacao, qtd, usuario, obs) {
+      return req('/rpc/contagem_definir_combo', {
+        method: 'POST',
+        body: {
+          p_modulo: modulo,
+          p_codigo: codigo,
+          p_cor_quadro: corQuadro,
+          p_cor_articulacao: corArticulacao,
+          p_qtd: qtd,
+          p_usuario: usuario || null,
+          p_obs: obs || null,
+          p_aparelho: aparelho()
+        }
+      });
+    }
+
+    function puxarOpcoes() {
+      return req('/contagem_cores_opcoes?select=tipo,nome&modulo=eq.' + m +
+                 '&order=nome', { timeout: 30000 });
+    }
+
+    function opcaoAdicionar(tipo, nome) {
+      return req('/rpc/contagem_opcao_adicionar', {
+        method: 'POST',
+        body: { p_modulo: modulo, p_tipo: tipo, p_nome: nome }
+      });
+    }
+
+    function opcaoRemover(tipo, nome) {
+      return req('/rpc/contagem_opcao_remover', {
+        method: 'POST',
+        body: { p_modulo: modulo, p_tipo: tipo, p_nome: nome }
       });
     }
 
@@ -389,6 +438,11 @@ var Nuvem = (function () {
       zerar: zerar,
       excluir: excluir,
       enviarItens: enviarItens,
+      puxarCombos: puxarCombos,
+      definirCombo: definirCombo,
+      puxarOpcoes: puxarOpcoes,
+      opcaoAdicionar: opcaoAdicionar,
+      opcaoRemover: opcaoRemover,
       puxarFoto: puxarFoto,
       salvarFoto: salvarFotoNuvem,
       apagarFoto: apagarFoto

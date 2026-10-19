@@ -42,6 +42,11 @@ window.ModuloContagem = (function () {
     var MOV = cfg.tabelaMov;               // ex.: 'movimentacoes_quadros'
     var IDB = 'pcp_' + id;
     var UN = cfg.unidade || 'pç';
+    /* combinacoes (cor do quadro + cor da articulacao): so Maquinas VG.
+       Tabelas locais: CMB (qtd por combinacao) e OPC (opcoes dos dropdowns).
+       Na nuvem: contagem_combos / contagem_cores_opcoes. */
+    var COMBOS = !!cfg.combos;
+    var CMB = 'cmb_' + id, OPC = 'opc_' + id;
     /* foto de referência no item: por enquanto só Carenagens VG.
        Fica no IndexedDB local (kv: foto_<codigo>), fora do SQLite,
        porque a sincronização apaga e regrava a tabela de itens. */
@@ -82,7 +87,17 @@ window.ModuloContagem = (function () {
       '  observacao TEXT' + (TEM_CORES ? ', cores TEXT' : ''),
       ');',
       'CREATE INDEX IF NOT EXISTS ix_' + id + '_mov_item ON ' + MOV + '(codigo_item);',
-      'CREATE INDEX IF NOT EXISTS ix_' + id + '_mov_data ON ' + MOV + '(data_hora);'
+      'CREATE INDEX IF NOT EXISTS ix_' + id + '_mov_data ON ' + MOV + '(data_hora);',
+      (COMBOS ? [
+        'CREATE TABLE IF NOT EXISTS ' + CMB + ' (',
+        '  codigo TEXT NOT NULL, cor_quadro TEXT NOT NULL, cor_articulacao TEXT NOT NULL,',
+        '  qtd REAL NOT NULL DEFAULT 0,',
+        '  PRIMARY KEY (codigo, cor_quadro, cor_articulacao)',
+        ');',
+        'CREATE TABLE IF NOT EXISTS ' + OPC + ' (',
+        '  tipo TEXT NOT NULL, nome TEXT NOT NULL, PRIMARY KEY (tipo, nome)',
+        ');'
+      ].join('\n') : '')
     ].join('\n');
 
     /* ---------- banco (kit compartilhado) ---------- */
@@ -172,12 +187,36 @@ window.ModuloContagem = (function () {
              P.paraLocal(m.data_hora), m.usuario || null, m.observacao || null]
               .concat(TEM_CORES ? [cm ? JSON.stringify(cm) : null] : []));
         });
+        if (COMBOS && dados.combos) {
+          db.run('DELETE FROM ' + CMB);
+          dados.combos.forEach(function (c) {
+            db.run('INSERT INTO ' + CMB + ' (codigo,cor_quadro,cor_articulacao,qtd) VALUES (?,?,?,?)',
+              [c.codigo, c.cor_quadro, c.cor_articulacao, Number(c.qtd) || 0]);
+          });
+        }
+        if (COMBOS && dados.opcoes) {
+          db.run('DELETE FROM ' + OPC);
+          dados.opcoes.forEach(function (o) {
+            db.run('INSERT OR IGNORE INTO ' + OPC + ' (tipo,nome) VALUES (?,?)', [o.tipo, o.nome]);
+          });
+        }
         db.run('COMMIT');
       } catch (e) {
         try { db.run('ROLLBACK'); } catch (e2) {}
         throw e;
       }
       salvar(true);
+    }
+
+    /* baixa combinacoes e opcoes junto com os itens (so modulos com combos) */
+    function carregarExtras(d) {
+      if (!COMBOS) return Promise.resolve(d);
+      var api = nv();
+      return Promise.all([api.puxarCombos(), api.puxarOpcoes()]).then(function (r) {
+        d.combos = r[0] || [];
+        d.opcoes = r[1] || [];
+        return d;
+      }).catch(function () { return d; });  /* patch SQL ainda nao rodou: segue sem combos */
     }
 
     /* aplica no cache o item devolvido pela nuvem */
@@ -218,7 +257,7 @@ window.ModuloContagem = (function () {
 
       return api.puxarTudo(null, function (nI, nM) {
         P.nuvemStatus('Baixando... ' + nI + ' itens' + (nM ? ' • ' + nM + ' mov.' : ''), 'sync');
-      }).then(function (d) {
+      }).then(carregarExtras).then(function (d) {
         /* trava: nuvem vazia NUNCA apaga o que já existe aqui.
            Nesse caso o certo é usar "Enviar itens deste aparelho". */
         if (!d.itens.length && escalar('SELECT COUNT(*) FROM ' + TAB) > 0) {
@@ -229,6 +268,7 @@ window.ModuloContagem = (function () {
         gravarCache(d);
         statusNuvem();
         render();
+        if (COMBOS) renderOpcoes();
         if (!silencioso) toast('Sincronizado • ' + d.itens.length + ' itens', 'ok');
         return true;
       }).catch(function (e) {
@@ -334,6 +374,16 @@ window.ModuloContagem = (function () {
         '  <div class="card">',
         '    <h3>Exportar</h3>',
         '    <p class="muted small">Gere o arquivo para levar ao PC (pasta <em>Downloads</em>).</p>',
+        (COMBOS ? [
+          '    <div class="card">',
+          '      <h3>Cores (dropdowns)</h3>',
+          '      <p class="muted small">Lista usada ao contar: cor do quadro e cor da articulação.</p>',
+          '      <select id="' + id + 'OpcTipo" class="inp"><option value="quadro">Cor do quadro</option><option value="articulacao">Cor da articulação</option></select>',
+          '      <input id="' + id + 'OpcNome" type="text" class="inp" placeholder="Nova cor" autocomplete="off">',
+          '      <button id="' + id + 'OpcAdd" class="btn ghost block" type="button">+ Adicionar cor</button>',
+          '      <div id="' + id + 'OpcLista"></div>',
+          '    </div>'
+        ].join('\n') : ''),
         '    <button id="' + id + 'Relatorio" class="btn primary block" type="button">📋 Relatório de contagem (.csv)</button>',
         '    <p class="muted small">Cod, Nome e Qtd. Itens zerados não entram.</p>',
         '    <button id="' + id + 'ExportCsv" class="btn ghost block" type="button">⬇ Exportar itens (.csv)</button>',
@@ -404,7 +454,13 @@ window.ModuloContagem = (function () {
         })).concat([
           '    <input id="' + id + 'QtdInput" type="number" value="0" hidden>'
         ]).join('\n') : [
-          '    <label class="lbl">Quantidade contada</label>',
+          (COMBOS ? [
+            '    <label class="lbl">Cor do quadro</label>',
+            '    <select id="' + id + 'CmbQ" class="inp"></select>',
+            '    <label class="lbl">Cor da articulação</label>',
+            '    <select id="' + id + 'CmbA" class="inp"></select>'
+          ].join('\n') + '\n' : '') +
+          '    <label class="lbl">Quantidade contada' + (COMBOS ? ' (desta combinação)' : '') + '</label>',
           '    <div class="qty">',
           '      <button class="qty-btn" data-' + id + 'passo="-1" type="button">-</button>',
           '      <input id="' + id + 'QtdInput" type="number" inputmode="decimal" step="any" min="0" value="0">',
@@ -424,6 +480,10 @@ window.ModuloContagem = (function () {
         '      <button class="btn ghost" data-' + id + 'fechar="1" type="button">Cancelar</button>',
         '      <button id="' + id + 'QtdSalvar" class="btn primary" type="button">Confirmar</button>',
         '    </div>',
+        (COMBOS ? [
+          '    <label class="lbl">Já contadas nesta máquina</label>',
+          '    <div id="' + id + 'CmbContadas"></div>'
+        ].join('\n') : ''),
         '  </div>',
         '</div>',
         '<div id="' + id + 'SheetCad" class="sheet-wrap" data-modulo="' + id + '">',
@@ -604,6 +664,13 @@ window.ModuloContagem = (function () {
         somarCores();
       }
       if (TEM_FOTO) carregarFoto(codigo);
+      if (COMBOS) {
+        preencherSelects();
+        /* abre sempre sem cor escolhida: o usuario seleciona a cada contagem */
+        $(id + 'CmbQ').value = '';
+        $(id + 'CmbA').value = '';
+        $(id + 'QtdInput').value = qtdCombo();
+      }
       previaQtd();
       $(id + 'SheetQtd').classList.add('open');
       if (!TEM_CORES) setTimeout(function () { $(id + 'QtdInput').select(); }, 120);
@@ -624,15 +691,89 @@ window.ModuloContagem = (function () {
       previaQtd();
     }
 
+    function renderOpcoes() {
+      var el = $(id + 'OpcLista');
+      if (!el) return;
+      el.innerHTML = [['quadro', 'Quadro'], ['articulacao', 'Articulação']].map(function (t) {
+        return opcoesDe(t[0]).map(function (n) {
+          return '<div class="kv"><span>' + t[1] + ': ' + esc(n) + '</span>' +
+            '<button class="btn ghost" type="button" data-tipo="' + t[0] + '" data-opc-del="' + esc(n) + '">Remover</button></div>';
+        }).join('');
+      }).join('');
+    }
+
+    /* ---------- combinacoes (cor do quadro + articulacao) ---------- */
+    function opcoesDe(tipo) {
+      return sel('SELECT nome FROM ' + OPC + ' WHERE tipo = ? ORDER BY nome', [tipo])
+        .map(function (r) { return r.nome; });
+    }
+
+    function preencherSelects() {
+      [['CmbQ', 'quadro'], ['CmbA', 'articulacao']].forEach(function (p) {
+        var s = $(id + p[0]);
+        var atual = s.value;
+        s.innerHTML = '<option value="">Escolha...</option>' + opcoesDe(p[1]).map(function (n) {
+          return '<option value="' + esc(n) + '">' + esc(n) + '</option>';
+        }).join('');
+        s.value = atual;
+      });
+    }
+
+    /* qtd ja contada da combinacao escolhida (0 se nenhuma) */
+    function qtdCombo() {
+      var q = $(id + 'CmbQ').value, a = $(id + 'CmbA').value;
+      var it = estado.itemAtual;
+      if (!q || !a || !it) return 0;
+      return Number(escalar('SELECT qtd FROM ' + CMB +
+        ' WHERE codigo = ? AND cor_quadro = ? AND cor_articulacao = ?', [it.codigo, q, a])) || 0;
+    }
+
+    /* lista, no fim do sheet, as combinacoes ja contadas da maquina aberta */
+    function renderCombosContadas() {
+      var el = $(id + 'CmbContadas');
+      var it = estado.itemAtual;
+      if (!el || !it) return;
+      var qa = $(id + 'CmbQ').value, aa = $(id + 'CmbA').value;
+      var linhas = sel('SELECT cor_quadro, cor_articulacao, qtd FROM ' + CMB +
+        ' WHERE codigo = ? AND qtd > 0 ORDER BY cor_quadro, cor_articulacao', [it.codigo]);
+      /* contagem rapida: o que esta no total da maquina mas sem combinacao de cor */
+      var somaCor = 0;
+      linhas.forEach(function (r) { somaCor += Number(r.qtd) || 0; });
+      var atualDb = um('SELECT qtd FROM ' + TAB + ' WHERE codigo = ?', [it.codigo]);
+      var semCor = Math.max(0, (atualDb ? Number(atualDb.qtd) : Number(it.qtd)) - somaCor);
+      if (!linhas.length && !semCor) { el.innerHTML = '<div class="muted small">Nenhuma combinação contada ainda.</div>'; return; }
+      var total = semCor;
+      var htmlSemCor = semCor
+        ? '<div class="kv"><span>Sem cor (quadro)</span><b>' + P.fmtNum(semCor) + '</b></div>'
+        : '';
+      el.innerHTML = htmlSemCor + linhas.map(function (r) {
+        total += Number(r.qtd) || 0;
+        var atual = r.cor_quadro === qa && r.cor_articulacao === aa;
+        return '<div class="kv" data-cq="' + esc(r.cor_quadro) + '" data-ca="' + esc(r.cor_articulacao) + '" style="cursor:pointer' +
+          (atual ? ';font-weight:bold' : '') + '"><span>' + esc(r.cor_quadro) + ' + ' + esc(r.cor_articulacao) +
+          '</span><b>' + P.fmtNum(r.qtd) + '</b></div>';
+      }).join('') + '<div class="kv"><span>Total da máquina</span><b>' + P.fmtNum(total) + '</b></div>';
+      Array.prototype.forEach.call(el.querySelectorAll('[data-cq]'), function (row) {
+        row.addEventListener('click', function () {
+          $(id + 'CmbQ').value = row.getAttribute('data-cq');
+          $(id + 'CmbA').value = row.getAttribute('data-ca');
+          $(id + 'QtdInput').value = qtdCombo();
+          previaQtd();
+        });
+      });
+    }
+
     function previaQtd() {
       var it = estado.itemAtual;
       if (!it) return;
       var nova = num($(id + 'QtdInput').value);
-      var d = nova - it.qtd;
+      var base = COMBOS ? qtdCombo() : it.qtd;
+      var d = nova - base;
       var txt = d === 0
         ? 'Sem alteração na quantidade.'
-        : (P.fmtNum(it.qtd) + ' → ' + P.fmtNum(nova) + '  (' + (d > 0 ? '+' : '') + P.fmtNum(d) + ')');
+        : (P.fmtNum(base) + ' → ' + P.fmtNum(nova) + '  (' + (d > 0 ? '+' : '') + P.fmtNum(d) + ')');
       $(id + 'QtdPrevia').textContent = txt;
+      if (COMBOS) renderCombosContadas();
     }
 
     /* grava a mudança de quantidade no cache local + histórico */
@@ -658,9 +799,61 @@ window.ModuloContagem = (function () {
       salvar(true);
     }
 
+    /* grava no cache local: qtd da combinacao, total do item e historico */
+    function aplicarCombo(codigo, q, a, qtdComb, totalFinal, delta, obs) {
+      db.run('INSERT OR REPLACE INTO ' + CMB + ' (codigo,cor_quadro,cor_articulacao,qtd) VALUES (?,?,?,?)',
+        [codigo, q, a, qtdComb]);
+      aplicarLocal(codigo, totalFinal, delta, (q + ' + ' + a) + (obs ? ' | ' + obs : ''));
+    }
+
+    function confirmarCombo() {
+      var it = estado.itemAtual;
+      var q = $(id + 'CmbQ').value, a = $(id + 'CmbA').value;
+      if (!q || !a) { toast('Escolha a cor do quadro e da articulação', 'err'); return; }
+      var nova = num($(id + 'QtdInput').value);
+      if (nova < 0) { toast('Quantidade não pode ser negativa', 'err'); return; }
+      var base = qtdCombo();
+      var d = nova - base;
+      if (d === 0) { fecharSheets(); return; }
+      var obs = $(id + 'QtdObs').value.trim();
+
+      var ok = function (total) {
+        fecharSheets();
+        P.vibrar(60);
+        P.bip(d > 0 ? 1046 : 700, 0.1);
+        toast(it.codigo + ' (' + q + ' + ' + a + '): ' + P.fmtNum(nova), 'ok');
+        render();
+      };
+
+      var api = nv();
+      if (!api) { aplicarCombo(it.codigo, q, a, nova, it.qtd + d, d, obs); semNuvem(); ok(it.qtd + d); return; }
+
+      var btn = $(id + 'QtdSalvar');
+      var rotulo = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Gravando na nuvem...';
+      api.definirCombo(it.codigo, q, a, nova, P.operador(), obs)
+        .then(function (r) {
+          var novoItem = itemDaResposta(r);
+          var total = novoItem ? Number(novoItem.qtd) : it.qtd + d;
+          upsertLocal(novoItem);
+          aplicarCombo(it.codigo, q, a, nova, total, total - it.qtd, obs);
+          statusNuvem();
+          ok(total);
+        })
+        .catch(function (e) {
+          statusNuvem();
+          P.vibrar([80, 60, 80]);
+          P.bip(220, 0.25);
+          toast('NÃO gravado: ' + e.message, 'err');
+        })
+        .then(function () { btn.disabled = false; btn.textContent = rotulo; });
+    }
+
     function confirmarQtd() {
       var it = estado.itemAtual;
       if (!it) return;
+      if (COMBOS) { confirmarCombo(); return; }
       if (TEM_CORES) somarCores();
       var cores = TEM_CORES ? coresDoSheet() : null;
       var nova = num($(id + 'QtdInput').value);
@@ -711,10 +904,51 @@ window.ModuloContagem = (function () {
     }
 
     /* passo rápido direto na lista (- / +) */
+    /* baixa uma combinacao colorida em |d| (contagem rapida "-") */
+    function passoCombo(it, cb, d) {
+      var nova = Math.max(0, Number(cb.qtd) + d);
+      var dReal = nova - Number(cb.qtd);
+      var obs = 'contagem rápida';
+      var api = nv();
+      if (!api) {
+        aplicarCombo(it.codigo, cb.cor_quadro, cb.cor_articulacao, nova, it.qtd + dReal, dReal, obs);
+        semNuvem();
+        P.vibrar(25);
+        render();
+        return;
+      }
+      api.definirCombo(it.codigo, cb.cor_quadro, cb.cor_articulacao, nova, P.operador(), obs)
+        .then(function (r) {
+          var novoItem = itemDaResposta(r);
+          var total = novoItem ? Number(novoItem.qtd) : it.qtd + dReal;
+          upsertLocal(novoItem);
+          aplicarCombo(it.codigo, cb.cor_quadro, cb.cor_articulacao, nova, total, total - it.qtd, obs);
+          P.vibrar(25);
+          statusNuvem();
+          render();
+        })
+        .catch(function (e) {
+          P.vibrar([80, 60, 80]);
+          statusNuvem();
+          toast('NÃO gravado: ' + e.message, 'err');
+        });
+    }
+
     function passo(codigo, d) {
       var it = um('SELECT * FROM ' + TAB + ' WHERE codigo = ?', [codigo]);
       if (!it) return;
       if (it.qtd + d < 0) { P.vibrar(80); return; }
+
+      /* "-" na contagem rapida: primeiro tira do que esta sem cor; acabando,
+         tira tambem das combinacoes coloridas (a de maior quantidade). */
+      if (COMBOS && d < 0) {
+        var somaCor = Number(escalar('SELECT COALESCE(SUM(qtd),0) FROM ' + CMB + ' WHERE codigo = ?', [codigo])) || 0;
+        if (it.qtd - somaCor < -d) {
+          var cb = um('SELECT cor_quadro, cor_articulacao, qtd FROM ' + CMB +
+            ' WHERE codigo = ? AND qtd > 0 ORDER BY qtd DESC, cor_quadro, cor_articulacao LIMIT 1', [codigo]);
+          if (cb) { passoCombo(it, cb, d); return; }
+        }
+      }
 
       var api = nv();
       if (!api) {
@@ -876,6 +1110,7 @@ window.ModuloContagem = (function () {
       if (!confirm('Confirma mesmo? A contagem atual será perdida.')) return;
 
       var localmente = function () {
+        if (COMBOS) db.run('DELETE FROM ' + CMB);
         var agora = P.agoraISO(), op = P.operador() || null;
         sel('SELECT codigo, qtd FROM ' + TAB + ' WHERE qtd <> 0').forEach(function (r) {
           db.run(
@@ -1271,6 +1506,41 @@ window.ModuloContagem = (function () {
 
       /* configurações */
       $(id + 'Sync').addEventListener('click', function () { sincronizar(false); });
+      if (COMBOS) {
+        ['CmbQ', 'CmbA'].forEach(function (s) {
+          $(id + s).addEventListener('change', function () {
+            $(id + 'QtdInput').value = qtdCombo();
+            previaQtd();
+          });
+        });
+        $(id + 'OpcAdd').addEventListener('click', function () {
+          var nome = $(id + 'OpcNome').value.trim();
+          if (!nome) { toast('Digite o nome da cor', 'err'); return; }
+          var tipo = $(id + 'OpcTipo').value;
+          var api = nv();
+          if (!api) { toast('Sem nuvem: entre online para editar a lista', 'err'); return; }
+          api.opcaoAdicionar(tipo, nome).then(function () {
+            db.run('INSERT OR IGNORE INTO ' + OPC + ' (tipo,nome) VALUES (?,?)', [tipo, nome]);
+            salvar(true);
+            $(id + 'OpcNome').value = '';
+            renderOpcoes();
+          }).catch(function (e) { toast('Falha: ' + e.message, 'err'); });
+        });
+        $(id + 'OpcLista').addEventListener('click', function (ev) {
+          var b = ev.target.closest('[data-opc-del]');
+          if (!b) return;
+          var tipo = b.getAttribute('data-tipo'), nome = b.getAttribute('data-opc-del');
+          var api = nv();
+          if (!api) { toast('Sem nuvem: entre online para editar a lista', 'err'); return; }
+          if (!confirm('Remover "' + nome + '" da lista? Contagens já feitas com essa cor continuam salvas.')) return;
+          api.opcaoRemover(tipo, nome).then(function () {
+            db.run('DELETE FROM ' + OPC + ' WHERE tipo = ? AND nome = ?', [tipo, nome]);
+            salvar(true);
+            renderOpcoes();
+          }).catch(function (e) { toast('Falha: ' + e.message, 'err'); });
+        });
+        try { renderOpcoes(); } catch (e) { /* banco ainda abrindo: renderiza apos sincronizar */ }
+      }
       $(id + 'Enviar').addEventListener('click', enviarDaqui);
       $(id + 'Zerar').addEventListener('click', zerarTudo);
       $(id + 'Excluir').addEventListener('click', excluirItem);
@@ -1286,9 +1556,31 @@ window.ModuloContagem = (function () {
         var linhas = sel('SELECT codigo, nome, qtd FROM ' + TAB +
                          ' WHERE COALESCE(qtd,0) <> 0 ORDER BY codigo');
         if (!linhas.length) { toast('Nenhum item com quantidade contada', 'err'); return; }
-        var txt = P.csvDe(['Cod', 'Nome', 'Qtd'], linhas.map(function (r) {
-          return { Cod: r.codigo, Nome: r.nome, Qtd: r.qtd };
-        }));
+        var txt;
+        if (COMBOS) {
+          /* uma linha por combinacao (iguais ja vem agrupadas); o que foi
+             contado sem cor (contagem rapida) entra como "Sem cor" */
+          var saida = [];
+          linhas.forEach(function (r) {
+            var cs = sel('SELECT cor_quadro, cor_articulacao, qtd FROM ' + CMB +
+              ' WHERE codigo = ? AND qtd > 0 ORDER BY cor_quadro, cor_articulacao', [r.codigo]);
+            var soma = 0;
+            cs.forEach(function (c) {
+              soma += c.qtd;
+              saida.push({ Cod: r.codigo, Nome: r.nome, Quadro: c.cor_quadro,
+                           Articulacao: c.cor_articulacao, Qtd: c.qtd, Total: r.qtd });
+            });
+            if (r.qtd - soma > 0) {
+              saida.push({ Cod: r.codigo, Nome: r.nome, Quadro: 'Sem cor',
+                           Articulacao: 'Sem cor', Qtd: r.qtd - soma, Total: r.qtd });
+            }
+          });
+          txt = P.csvDe(['Cod', 'Nome', 'Quadro', 'Articulacao', 'Qtd', 'Total'], saida);
+        } else {
+          txt = P.csvDe(['Cod', 'Nome', 'Qtd'], linhas.map(function (r) {
+            return { Cod: r.codigo, Nome: r.nome, Qtd: r.qtd };
+          }));
+        }
         P.baixar(new Blob([txt], { type: 'text/csv;charset=utf-8' }), id + '_relatorio_' + P.carimbo() + '.csv');
         toast('Relatório gerado (pasta Downloads)', 'ok');
       });

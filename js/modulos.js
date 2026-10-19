@@ -22,15 +22,16 @@ window.MODULOS = [
   },
   {
     id: 'quadro',
-    nome: 'Contagem de Quadros VG',
-    desc: 'Contagem cíclica de quadros na produção. Banco próprio: quadros / movimentacoes_quadros.',
+    nome: 'Contagem de Máquinas VG',
+    desc: 'Contagem cíclica de máquinas na produção, com cor do quadro e da articulação. Banco próprio: quadros / movimentacoes_quadros.',
     icone: '🔢',
-    titulo: 'Contagem de Quadros VG',
+    titulo: 'Contagem de Máquinas VG',
     viewInicial: 'quadro-cont',
     pronto: true,
     tipo: 'contagem',
     tabela: 'quadros',
     tabelaMov: 'movimentacoes_quadros',
+    combos: true,
     unidade: 'pç'
   },
   {
