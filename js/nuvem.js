@@ -669,6 +669,13 @@ var Nuvem = (function () {
         method: 'POST',
         body: { p_modulo: modulo, p_id: id, p_usuario: usuario || null },
         timeout: 30000
+      }).then(function (r) {
+        /* o vinculo do modulo Kits nao tem FK: limpa em melhor esforco
+           para nao sobrar badge de falta ja excluida */
+        if (modulo === 'faltas') {
+          kitsFaltaDesvincular(id).then(null, function () {});
+        }
+        return r;
       });
     }
 
@@ -772,6 +779,134 @@ var Nuvem = (function () {
     }
   };
 
+  /* =======================================================
+     KITS - espelho da planilha Google no Supabase, mantido pelo
+     Apps Script (apps-script/kits-sync.gs). O historico e as faltas
+     vinculadas moram em kits_historico e kits_faltas
+     (supabase/patch_kits.sql); o espelho e a fila em
+     supabase/patch_kits_sync.sql.
+  ======================================================= */
+  /* Via Apps Script: a planilha e espelhada em kits_linhas / kits_sync
+     (supabase/patch_kits_sync.sql). O app so le o espelho; o "separar"
+     vai pela RPC kits_separar, que marca na hora, grava o historico e
+     enfileira a escrita na planilha (o script grava TRUE em ALMOX. FRENTE
+     em ate ~1 min). */
+  function kitsAbas() {
+    return req('/kits_sync?select=aba&order=aba').then(function (r) {
+      return (r || []).map(function (x) { return x.aba; });
+    });
+  }
+
+  /* devolve { aba, linhas:[{linha,carga,produto,almoxFrente,kit}], sincronizadoEm } */
+  function kitsLer(aba) {
+    var a = encodeURIComponent(aba);
+    return Promise.all([
+      puxarPaginado('/kits_linhas?select=linha,carga,produto,almox_frente,kit&aba=eq.' + a + '&order=linha'),
+      req('/kits_sync?select=sincronizado_em&aba=eq.' + a).then(null, function () { return null; })
+    ]).then(function (r) {
+      var sync = r[1] && r[1][0] && r[1][0].sincronizado_em;
+      return {
+        aba: aba,
+        sincronizadoEm: sync ? new Date(sync).getTime() : 0,
+        linhas: (r[0] || []).map(function (x) {
+          return {
+            linha: x.linha,
+            carga: x.carga == null ? '' : x.carga,
+            produto: x.produto,
+            almoxFrente: x.almox_frente === true,
+            kit: x.kit === true
+          };
+        })
+      };
+    });
+  }
+
+  /* a RPC valida contra o espelho e levanta excecao com texto proprio;
+     os casos "planilha mudou / kit nao liberado" viram status 409, que o
+     kits.js trata relendo a lista */
+  function kitsSeparar(d) {
+    var ap = null;
+    try { ap = aparelho(); } catch (e) {}
+    return req('/rpc/kits_separar', {
+      method: 'POST',
+      body: {
+        p_aba: d.aba,
+        p_linha: d.linha,
+        p_carga: d.carga == null ? null : d.carga,
+        p_produto: d.produto,
+        p_usuario: d.usuario || null,
+        p_aparelho: ap
+      }
+    }).then(null, function (e) {
+      if (/mudou|nao esta liberado|nao encontrada/i.test(String(e && e.message))) e.status = 409;
+      throw e;
+    });
+  }
+
+  /* mais recentes primeiro; filtro por aba so se informado */
+  function kitsHistorico(d) {
+    var o = d || {};
+    return req('/kits_historico?select=*' +
+      (o.aba ? '&aba=eq.' + encodeURIComponent(o.aba) : '') +
+      '&order=criado_em.desc,id.desc&limit=' + (o.limite || 200));
+  }
+
+  function kitsFaltaVincular(d) {
+    return req('/rpc/kits_vincular_falta', {
+      method: 'POST',
+      body: {
+        p_aba: d.aba,
+        p_linha: d.linha,
+        p_carga: d.carga == null ? null : d.carga,
+        p_produto: d.produto,
+        p_falta_id: String(d.falta_id),
+        p_codigo: d.codigo,
+        p_usuario: d.criado_por || null
+      }
+    });
+  }
+
+  /* limpa os vinculos de uma falta excluida (nao ha FK no banco) */
+  function kitsFaltaDesvincular(faltaId) {
+    return req('/rpc/kits_desvincular_falta', {
+      method: 'POST',
+      body: { p_falta_id: String(faltaId) }
+    });
+  }
+
+  /* para o badge de falta nos kits da aba */
+  function kitsFaltasDe(aba) {
+    return puxarPaginado('/kits_faltas?select=*&aba=eq.' + encodeURIComponent(aba) + '&order=id').then(function (lista) {
+      lista = lista || [];
+      var ids = [];
+      lista.forEach(function (f) {
+        var k = String(f.falta_id);
+        if (k && ids.indexOf(k) < 0) ids.push(k);
+      });
+      if (!ids.length) return lista;
+      var lotes = [];
+      for (var i = 0; i < ids.length; i += 40) lotes.push(ids.slice(i, i + 40));
+      /* qtd e suprida_em moram na tabela faltas; se a consulta falhar,
+         a lista segue sem esses dados */
+      return Promise.all(lotes.map(function (lote) {
+        return req('/faltas?select=id,qtd,suprida_em&id=in.(' + lote.map(encodeURIComponent).join(',') + ')');
+      })).then(function (rs) {
+        var mapa = {};
+        rs.forEach(function (r) {
+          (r || []).forEach(function (x) { mapa[String(x.id)] = x; });
+        });
+        return lista.map(function (f) {
+          var x = mapa[String(f.falta_id)];
+          if (x) {
+            f.qtd = x.qtd;
+            f.suprida_em = x.suprida_em || null;
+          }
+          return f;
+        });
+      }).then(null, function () { return lista; });
+    });
+  }
+
   /* leitura crua de qualquer tabela/view, para o modulo Banco de Dados.
      Usa a mesma paginacao das outras leituras (o Supabase corta em 1000). */
   function puxarTabela(nome, aoProgredir) {
@@ -785,6 +920,13 @@ var Nuvem = (function () {
     eficiencia: eficiencia,
     faltas: faltas,
     push: push,
+    kitsAbas: kitsAbas,
+    kitsLer: kitsLer,
+    kitsSeparar: kitsSeparar,
+    kitsHistorico: kitsHistorico,
+    kitsFaltaVincular: kitsFaltaVincular,
+    kitsFaltaDesvincular: kitsFaltaDesvincular,
+    kitsFaltasDe: kitsFaltasDe,
     ativa: ativa,
     conectado: conectado,
     config: config,

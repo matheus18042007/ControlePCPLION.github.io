@@ -179,9 +179,10 @@
 </nav>
 
 <!-- ================= SHEET MOVIMENTAÇÃO ================= -->
-<div id="sheetMov" class="sheet-wrap">
+<div id="sheetMov" class="sheet-wrap janela-pc">
   <div class="sheet">
     <div class="sheet-handle"></div>
+    <button class="janela-x" data-janela-fechar type="button" aria-label="Fechar">&times;</button>
     <h3 id="movTitulo">Entrada</h3>
     <div class="mov-item">
       <b id="movNome">-</b>
@@ -213,9 +214,10 @@
 </div>
 
 <!-- ================= SHEET CADASTRO ================= -->
-<div id="sheetItem" class="sheet-wrap">
+<div id="sheetItem" class="sheet-wrap janela-pc">
   <div class="sheet">
     <div class="sheet-handle"></div>
+    <button class="janela-x" data-janela-fechar type="button" aria-label="Fechar">&times;</button>
     <h3 id="cadTitulo">Novo item</h3>
     <label class="lbl" for="cadCodigo">Código *</label>
     <input id="cadCodigo" type="text" autocapitalize="characters" autocomplete="off">
@@ -308,6 +310,7 @@
 <script src="./js/eficiencia.js"></script>
 <script src="./js/push.js"></script>
 <script src="./js/faltas.js"></script>
+<script src="./js/kits.js"></script>
 <script src="./js/banco.js"></script>
 <script src="./js/app.js"></script>
 </body>

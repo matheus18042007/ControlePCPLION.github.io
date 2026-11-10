@@ -483,3 +483,76 @@ input:focus{border-color:var(--accent)}
 
 /* histórico de faltas: a linha "Suprida ..." é a boa notícia */
 .li-sub.li-sup-ok{color:var(--ok)}
+
+
+/* =========================================================
+   MODULO KITS (js/kits.js)
+   ========================================================= */
+.kits-topo{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.kits-select{
+  flex:1;min-width:0;background:var(--card-2);color:var(--txt);
+  border:1px solid var(--line);border-radius:12px;
+  padding:9px 10px;font-size:14px
+}
+.kits-status{margin:4px 2px 8px}
+.kits-status-erro{color:var(--warn)}
+
+.kit-grupo{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.kit-grupo-cont{font-size:12px;font-weight:600;color:var(--muted);text-transform:none;letter-spacing:0}
+
+.kit-li{cursor:pointer;border-left:4px solid var(--line)}
+.kit-li.liberado{border-left-color:var(--warn)}
+.kit-li.separado{border-left-color:var(--ok)}
+.kit-li.aguardando{border-left-color:var(--line);cursor:default}
+.kit-falta-qtd{color:var(--warn);font-weight:600;margin:0 8px}
+.kit-li.aguardando .li-nome{color:var(--muted)}
+
+.kit-seq{
+  display:inline-block;margin-left:4px;padding:1px 7px;border-radius:999px;
+  background:var(--card-2);color:var(--muted);font-size:11px;font-weight:700
+}
+.kit-falta-tag{color:var(--danger);font-weight:600}
+
+.badge.kit-badge.liberado{background:rgba(255,197,66,.16);color:var(--warn)}
+.badge.kit-badge.aguardando{background:rgba(138,143,152,.16);color:var(--muted)}
+.badge.kit-badge.separado{background:rgba(40,199,111,.16);color:var(--ok)}
+
+.kit-sep-btn{flex:none;padding:8px 14px;font-size:13px}
+
+.kit-det-acoes{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+
+/* ---- janelas do Kits (detalhe, separar, registrar falta) ----
+   celular: continuam como folha presa embaixo.
+   PC: viram janela centralizada, com barra de título e botão X. */
+.janela-pc .janela-x{display:none}
+@keyframes janela{from{transform:scale(.97);opacity:0}to{transform:none;opacity:1}}
+@media (min-width:900px){
+  .sheet-wrap.janela-pc{align-items:center;justify-content:center;padding:24px}
+  .janela-pc .sheet{
+    position:relative;width:min(560px,100%);max-height:calc(100vh - 48px);
+    border:1px solid var(--line);border-radius:12px;padding:18px;
+    box-shadow:0 24px 70px rgba(0,0,0,.65);animation:janela .16s ease;
+  }
+  .janela-pc .sheet-handle{display:none}
+  .janela-pc .sheet h3{
+    margin:-18px -18px 14px;padding:13px 54px 13px 18px;font-size:16px;
+    background:var(--card);border-bottom:1px solid var(--line);
+    border-radius:12px 12px 0 0;
+  }
+  .janela-pc .janela-x{
+    display:flex;align-items:center;justify-content:center;
+    position:absolute;top:7px;right:9px;width:34px;height:34px;
+    border:0;border-radius:8px;background:transparent;
+    color:var(--muted);font-size:24px;line-height:1;cursor:pointer;
+  }
+  .janela-pc .janela-x:hover{background:var(--card-2);color:var(--txt)}
+  .janela-pc .kit-det-acoes{flex-direction:row;flex-wrap:wrap}
+  .janela-pc .kit-det-acoes .btn{flex:1;width:auto;min-width:150px}
+  .janela-pc .kit-det-acoes p{flex:1 0 100%}
+  .janela-pc .kit-falta-form{margin-top:0;padding-top:0;border-top:0}
+}
+.kit-falta-janela-kit{margin:0 0 10px}
+.kit-falta-item{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
+.kit-falta-form{display:none;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+.kit-falta-form.aberto{display:block}
+.kit-falta-form input{display:block;width:100%;margin-bottom:8px}

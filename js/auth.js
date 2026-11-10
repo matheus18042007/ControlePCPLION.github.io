@@ -154,6 +154,24 @@ var Auth = (function () {
   function usuario() { return sessao ? sessao.nome : ''; }
   function configNuvem() { return sessao ? sessao.cfg : null; }
 
+  /* Permissao de modulo (cerca de tela, nao seguranca).
+     Ver: sem lista "mods" no cofre = ve tudo (cofre antigo); "edita" implica ver.
+     Editar: modulos de MODULOS_COM_EDICAO exigem o id em "edita" (ausente = false);
+     os demais seguem igual a podeVer (comportamento legado). */
+  var MODULOS_COM_EDICAO = ['kits'];
+
+  function podeVer(id) {
+    var u = sessao ? acharUsuario(sessao.login) : null;
+    if (!u || !u.mods) return true;
+    return u.mods.indexOf(id) !== -1 || (u.edita || []).indexOf(id) !== -1;
+  }
+
+  function podeEditar(id) {
+    if (MODULOS_COM_EDICAO.indexOf(id) === -1) return podeVer(id);
+    var u = sessao ? acharUsuario(sessao.login) : null;
+    return !!(u && u.edita && u.edita.indexOf(id) !== -1);
+  }
+
   /* =========================================================
      ADMIN - usado so pela pagina admin.html (cadastro)
      ========================================================= */
@@ -205,12 +223,14 @@ var Auth = (function () {
             env: env
           };
           if (dados.mods) u.mods = dados.mods.slice();
+          if (dados.edita) u.edita = dados.edita.slice();
           /* troca de senha = substitui o envelope do mesmo login */
           var lg = u.login.toLowerCase(), trocou = false;
           for (var i = 0; i < c.usuarios.length; i++) {
             if (String(c.usuarios[i].login).toLowerCase() === lg) {
               /* troca de senha mantem as permissoes ja gravadas */
               if (!u.mods && c.usuarios[i].mods) u.mods = c.usuarios[i].mods;
+              if (!u.edita && c.usuarios[i].edita) u.edita = c.usuarios[i].edita;
               c.usuarios[i] = u; trocou = true;
             }
           }
@@ -221,10 +241,13 @@ var Auth = (function () {
     },
 
     /* permissao de modulos (texto claro: e cerca de tela) */
-    setMods: function (c, login, mods) {
+    setMods: function (c, login, mods, edita) {
       var lg = String(login).toLowerCase();
       for (var i = 0; i < c.usuarios.length; i++) {
-        if (String(c.usuarios[i].login).toLowerCase() === lg) c.usuarios[i].mods = mods.slice();
+        if (String(c.usuarios[i].login).toLowerCase() === lg) {
+          c.usuarios[i].mods = mods.slice();
+          if (edita) c.usuarios[i].edita = edita.slice();
+        }
       }
       return c;
     },
@@ -271,6 +294,9 @@ var Auth = (function () {
     sair: sair,
     atual: atual,
     usuario: usuario,
+    podeVer: podeVer,
+    podeEditar: podeEditar,
+    MODULOS_COM_EDICAO: Object.freeze(MODULOS_COM_EDICAO.slice()),
     configNuvem: configNuvem,
     admin: admin
   };

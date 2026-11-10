@@ -22,6 +22,7 @@ o outro.
 | 🛡️ Carenagens VG | `carenagem` | Contagem cíclica de carenagens, contada por cor, com foto de referência | `pcp_carenagem` | idem, modulo=`carenagem` (+ `contagem_fotos`) |
 | ⏱️ Eficiência VG | `eficiencia` | Faltas e horas extras do dia, por setor. Histórico de 10 dias | `pcp_eficiencia` | `eficiencia_colaboradores`, `eficiencia_dias` |
 | ⚠️ Faltas VG | `faltas` | Registro de faltas de peças, com base de componentes e aviso por push | `pcp_faltas` | `faltas`, `faltas_componentes` |
+| 📦 Kits | `kits` | Separação de kits por máquina, com falta de componente (abas Kits e Histórico). Edição só para quem tem o id em `edita` no cofre (admin.html) | `pcp_kits` | `kits_historico`, `kits_faltas` (`supabase/patch_kits.sql`); planilha via Apps Script (`patch_kits_sync.sql`) |
 | ⚙️ Banco de Dados | `banco` | Backup de todos os módulos, estrutura das tabelas, nuvem e notificações (módulo restrito) | nenhum próprio (lê os bancos dos outros módulos) | todas, só leitura (backup em CSV) |
 
 ### Como adicionar um módulo novo
@@ -50,6 +51,7 @@ js/app.js           Núcleo: hub, telas do Almoxarifado, scanner QR,
 js/contagem.js      Motor genérico dos módulos de contagem (quadro, maquinas, carenagem)
 js/eficiencia.js    Módulo Eficiência VG (folha do dia + histórico)
 js/faltas.js        Módulo Faltas VG (registro de faltas + base de componentes)
+js/kits.js          Módulo Kits (separação de kits por máquina, falta de componente)
 js/push.js          Inscrição do aparelho em notificações (VAPID) — só o Faltas usa
 js/nuvem.js         Camada Supabase (REST/PostgREST) — um namespace por tipo de módulo
 js/auth.js          Login e cofre AES-GCM da config da nuvem
@@ -72,6 +74,7 @@ idempotentes e podem ser rodados de novo sem apagar dados.
 |---|---|
 | `patch_almoxarifado.sql` | Correção do `registrar_movimentacao` (saída grava quantidade positiva, sinal só no tipo) |
 | `patch_faltas.sql` | Ajustes da tabela `faltas` (colunas que faltavam, como `suprida_por`) |
+| `patch_kits.sql` | Módulo Kits: tabelas `kits_historico` e `kits_faltas` (FK `falta_id` para `faltas.id`, com `ON DELETE CASCADE`) e RPCs. Rodar depois do módulo Faltas existir |
 | `patch_carenagem_cores.sql` | Coluna `qtd_3d` (Adesivada 3D) em `contagem_itens` e `contagem_definir` passando a gravar essa cor |
 | `patch_historico_cores.sql` | Coluna `cores` em `contagem_movimentacoes`, `contagem_definir` gravando as cores no histórico, e views `carenagens` / `movimentacoes_carenagens` |
 | `patch_maquinas_cores.sql` | Cor do quadro e da articulação nas máquinas (ver abaixo) |
@@ -299,6 +302,14 @@ quanto, e em que pé está a reposição. Substitui o aviso no grito / no WhatsA
 colunas `codigo` e `nome` (separador `;` ou `,`). Serve **só** para preencher
 o nome na hora de registrar. Reimportar atualiza os nomes de quem já existe.
 
+**Atualizar a lista sem mexer em arquivo:** na aba Config do módulo, copie as
+duas colunas (código e nome) direto da planilha, cole na caixa e clique em
+"Importar o que colei". Aceita cabeçalho ou não, e separador TAB (colagem do
+Excel/Sheets), `;` ou `,`. Linhas sem código ou sem nome são ignoradas, com aviso.
+Quem já existe tem o nome atualizado e ninguém é apagado. Depois da importação
+local, a lista sobe para a nuvem (Supabase) e passa a valer em todos os aparelhos.
+O módulo Kits usa essa mesma base para preencher o nome ao registrar falta.
+
 ### Notificações (push)
 
 Único módulo com notificação. Toda falta registrada bate na Edge Function
@@ -345,6 +356,58 @@ Sem isso o módulo funciona inteiro — só não notifica.
 
 ---
 
+## Kits
+
+Separação de kits de componentes por máquina. A fonte da verdade é a planilha
+Google "PROGRAMAÇÃO DIÁRIA OPERACIONAL - 2026" (uma aba por semana, ex.:
+`2ª SEM NOV`); o banco guarda só o histórico e o vínculo com as faltas.
+
+### Fluxo
+
+1. O almoxarifado marca `TRUE` na coluna **KIT** da planilha (kit liberado).
+2. No app o kit fica clicável. Quem separa toca em **Separar** e o app grava
+   `TRUE` na coluna **ALMOX. FRENTE** pela API.
+3. Estados: **separado** = `ALMOX. FRENTE` marcada (com ou sem KIT) · **liberado**
+   = só `KIT` marcado · **aguardando** = nenhuma das duas.
+4. **Falta no kit:** digitando o código, o nome vem da base de componentes do
+   Faltas. Ao registrar, a falta entra na lista de Faltas (e dispara a
+   notificação) e fica vinculada ao kit.
+
+### Regras de leitura da planilha
+
+- O app envia só o **nome da aba**; semana e mês saem do nome (`<n>ª SEM <MÊS>`).
+- Só entra linha com código no formato `CÓDIGO - NOME` (o código pode vir depois
+  de `(SAT n)`). Ficam de fora as linhas `TOTAL DE MÁQUINAS...` e `LOGOTIPO`.
+- Exceção: as linhas de `BANCO MULTIFUNCIONAL` entram mesmo sem código, com
+  carga `LOJA`.
+- Máquinas repetidas são linhas independentes, cada uma com o seu kit.
+
+### Permissões
+
+No `admin.html` cada usuário tem **Ver** e **Editar** no módulo Kits (a caixa
+Editar só aparece para módulos listados em `Auth.MODULOS_COM_EDICAO`). Sem
+Editar o usuário vê os kits, mas não separa. Lembrar de republicar o
+`js/usuarios.js` depois de mexer.
+
+### Banco e função
+
+- SQL: `supabase/patch_kits.sql` (ver tabela de SQL acima).
+- SQL: `supabase/patch_kits_sync.sql` (espelho `kits_linhas`, `kits_sync`, fila
+  `kits_fila`, segredo em `kits_config`).
+- RPCs: `kits_registrar_historico`, `kits_vincular_falta`, `kits_desvincular_falta`,
+  `kits_separar` (pede a separação; vira linha em `kits_fila`).
+- O app lê `kits_linhas` (abas vêm de `kits_sync`) e chama `kits_separar`. Não
+  usa mais a Edge Function `kits-planilha`.
+- Apps Script `apps-script/kits-sync.gs` (dentro da planilha): a cada minuto
+  envia as abas editadas ao Supabase e grava `TRUE` em ALMOX. FRENTE para os
+  pedidos da fila. Passo a passo em `GUIA-KITS-APPS-SCRIPT.md`.
+- A tela mostra "Planilha sincronizada às HH:MM" e avisa se o espelho está
+  parado há mais de 10 minutos.
+- A pasta `supabase/functions/kits-planilha` e os segredos `GOOGLE_SA_*` não são
+  mais necessários.
+
+---
+
 ## Nuvem (Supabase)
 
 Sincronia por REST (PostgREST), com paginação. Toda escrita passa por função
@@ -355,6 +418,7 @@ Sincronia por REST (PostgREST), com paginação. Toda escrita passa por função
 - Contagem de Máquinas (combinações de cor): `contagem_definir_combo`, `contagem_zerar_combos`, `contagem_opcao_adicionar`, `contagem_opcao_remover`
 - Eficiência: `eficiencia_marcar`, `eficiencia_cadastrar`, `eficiencia_finalizar`, `eficiencia_excluir`
 - Faltas: `faltas_registrar`, `faltas_status`, `faltas_suprir`, `faltas_reabrir`, `faltas_excluir`, `push_registrar`, `push_remover`
+- Kits: `kits_registrar_historico`, `kits_vincular_falta`, `kits_desvincular_falta`
 
 RLS está ligado em todas as tabelas. Cada aparelho tem um id próprio, gravado
 junto com o usuário em toda movimentação.

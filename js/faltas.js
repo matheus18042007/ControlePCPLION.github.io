@@ -119,6 +119,25 @@ window.ModuloFaltas = (function () {
       });
     }
 
+    /* abre o banco uma unica vez, com ou sem a tela (preparar e pronto
+       usam o mesmo caminho; se falhar, libera para tentar de novo) */
+    var promessaBanco = null, promessaPronto = null;
+    function abrirBancoUmaVez() {
+      if (!promessaBanco) {
+        promessaBanco = abrirBanco()['catch'](function (e) { promessaBanco = null; throw e; });
+      }
+      return promessaBanco;
+    }
+
+    /* ouvintes de mudanca em faltas (API publica aoMudar). Um ouvinte
+       que lanca erro nunca derruba a tela nem os demais. */
+    var ouvintes = [];
+    function avisarMudanca(tipo) {
+      ouvintes.slice().forEach(function (cb) {
+        try { cb({ tipo: tipo }); } catch (e) {}
+      });
+    }
+
     var salvar = K.salvar, sel = K.sel, um = K.um, escalar = K.escalar;
 
     /* =======================================================
@@ -182,10 +201,15 @@ window.ModuloFaltas = (function () {
         '  </div>',
         '  <div class="card">',
         '    <h3>Base de componentes</h3>',
-        '    <p class="muted small">CSV com as colunas <b>codigo</b> e <b>nome</b> (separador ; ou ,).',
-        '       Reimportar atualiza os nomes de quem já existe.</p>',
+        '    <p class="muted small">Copie as 2 colunas da planilha (<b>código</b> e <b>nome</b>), cole abaixo e toque em Importar.',
+        '       Quem já existe tem o nome atualizado e os novos são adicionados. Nada é apagado.</p>',
+        '    <textarea id="' + id + 'ColarCsv" rows="5" autocomplete="off" autocapitalize="characters" spellcheck="false"',
+        '      placeholder="Cole aqui: código e nome, uma peça por linha"',
+        '      style="width:100%;box-sizing:border-box;background:var(--card-2);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:10px;font:inherit;margin:6px 0;resize:vertical"></textarea>',
+        '    <button id="' + id + 'ImportarColado" class="btn primary block" type="button">Importar o que colei</button>',
+        '    <p class="muted small">Ou use um arquivo CSV com as colunas <b>codigo</b> e <b>nome</b> (separador ; ou ,).</p>',
         '    <input id="' + id + 'FileCsv" type="file" accept=".csv,.txt" hidden>',
-        '    <button id="' + id + 'EscolherCsv" class="btn primary block" type="button">Escolher arquivo CSV</button>',
+        '    <button id="' + id + 'EscolherCsv" class="btn ghost block" type="button">Escolher arquivo CSV</button>',
         '    <div id="' + id + 'CsvResultado" class="muted small"></div>',
         '    <div class="kv"><span>Componentes cadastrados</span><b id="' + id + 'StatComp">0</b></div>',
         '    <button id="' + id + 'Enviar" class="btn ghost block" type="button">&#8593; Enviar componentes deste aparelho</button>',
@@ -225,9 +249,10 @@ window.ModuloFaltas = (function () {
       /* ---------- sheet de registro ---------- */
       var sheets = document.createElement('div');
       sheets.innerHTML = [
-        '<div id="' + id + 'SheetNova" class="sheet-wrap" data-modulo="' + id + '">',
+        '<div id="' + id + 'SheetNova" class="sheet-wrap janela-pc" data-modulo="' + id + '">',
         '  <div class="sheet">',
         '    <div class="sheet-handle"></div>',
+        '    <button class="janela-x" data-' + id + '-fechar="1" type="button" aria-label="Fechar">&times;</button>',
         '    <h3>Registrar falta</h3>',
         '    <label class="lbl">Almoxarifado *</label>',
         '    <div class="falta-alm-opts" id="' + id + 'AlmOpts">',
@@ -247,9 +272,10 @@ window.ModuloFaltas = (function () {
         '    </div>',
         '  </div>',
         '</div>',
-        '<div id="' + id + 'SheetZerar" class="sheet-wrap" data-modulo="' + id + '">',
+        '<div id="' + id + 'SheetZerar" class="sheet-wrap janela-pc" data-modulo="' + id + '">',
         '  <div class="sheet">',
         '    <div class="sheet-handle"></div>',
+        '    <button class="janela-x" data-' + id + '-fechar="1" type="button" aria-label="Fechar">&times;</button>',
         '    <h3>Zerar faltas</h3>',
         '    <p class="muted small">Apaga as faltas em aberto. O histórico de faltas supridas NÃO é afetado.</p>',
         '    <label class="lbl">Almoxarifado</label>',
@@ -339,6 +365,7 @@ window.ModuloFaltas = (function () {
         juntarDuplicados();
         statusNuvem();
         render();
+        avisarMudanca('sincronizar');
         if (!silencioso) toast('Sincronizado · ' + d.faltas.length + ' faltas em aberto', 'ok');
         /* aproveita a passagem para destravar notificação pendente
            que ficou presa no cooldown (ver supabase_faltas.sql) */
@@ -470,20 +497,13 @@ window.ModuloFaltas = (function () {
       return true;
     }
 
-    function adicionarFalta() {
-      if (!estado.almNova) { toast('Selecione o almoxarifado (Frente ou Fundo)', 'err'); return; }
-
-      var codigo = String($(id + 'Codigo').value || '').trim();
-      if (!codigo) { toast('Digite o código do componente', 'err'); return; }
-
-      var nome = String($(id + 'Nome').value || '').trim() || nomeDoCodigo(codigo);
-      if (!nome && !confirm('Código "' + codigo + '" não está na base de componentes.\n\nRegistrar assim mesmo?')) return;
-
-      var qtd = num($(id + 'Qtd').value);
-
+    /* ---- nucleo sem DOM: usado pela tela (adicionarFalta) e pela API
+       publica (registrarExterno). Grava local, redesenha e avisa os
+       ouvintes; o envio para a nuvem fica em enviarFalta. ---- */
+    function gravarFalta(codigo, nome, qtd, almox) {
       /* mesmo código no mesmo almoxarifado nao vira segunda linha:
          soma na que ja existe (#faltas-duplicadas) */
-      var existente = acharFalta(codigo, estado.almNova);
+      var existente = acharFalta(codigo, almox);
       var registro;
 
       if (existente) {
@@ -506,7 +526,7 @@ window.ModuloFaltas = (function () {
           nome: nome,
           qtd: qtd,
           status: 'aberta',
-          almoxarifado: estado.almNova,
+          almoxarifado: almox,
           criado_em: P.agoraISO(),
           criado_por: P.operador() || null
         };
@@ -516,23 +536,47 @@ window.ModuloFaltas = (function () {
       }
 
       salvar();
-      fecharSheets();
       render();
-      toast(existente
-        ? 'Somado à falta existente: ' + P.fmtNum(registro.qtd)
-        : 'Falta registrada', 'ok');
+      avisarMudanca('adicionar');
+      return { registro: registro, existente: existente };
+    }
 
+    /* envia a falta para a nuvem e bate na porta da Edge Function de
+       notificação. Resolve true/false (enviou ou não); nunca rejeita. */
+    function enviarFalta(registro) {
       var api = nv();
-      if (!api) { semNuvem(); return; }
-      api.registrar(registro, P.operador()).then(function () {
+      if (!api) { semNuvem(); return Promise.resolve(false); }
+      return api.registrar(registro, P.operador()).then(function () {
         statusNuvem();
         /* bate na porta da Edge Function: ela decide se já
            passou 1 min do cooldown. Nunca derruba nada. */
         Nuvem.push.notificar(id);
+        return true;
       }).catch(function (e) {
         statusNuvem();
         toast('Gravado aqui, mas falhou na nuvem: ' + e.message, 'err');
+        return false;
       });
+    }
+
+    function adicionarFalta() {
+      if (!estado.almNova) { toast('Selecione o almoxarifado (Frente ou Fundo)', 'err'); return; }
+
+      var codigo = String($(id + 'Codigo').value || '').trim();
+      if (!codigo) { toast('Digite o código do componente', 'err'); return; }
+
+      var nome = String($(id + 'Nome').value || '').trim() || nomeDoCodigo(codigo);
+      if (!nome && !confirm('Código "' + codigo + '" não está na base de componentes.\n\nRegistrar assim mesmo?')) return;
+
+      var qtd = num($(id + 'Qtd').value);
+
+      var r = gravarFalta(codigo, nome, qtd, estado.almNova);
+      fecharSheets();
+      toast(r.existente
+        ? 'Somado à falta existente: ' + P.fmtNum(r.registro.qtd)
+        : 'Falta registrada', 'ok');
+
+      enviarFalta(r.registro);
     }
 
     function mudarStatus(faltaId, novo) {
@@ -540,6 +584,7 @@ window.ModuloFaltas = (function () {
       db.run('UPDATE faltas SET status = ? WHERE id = ?', [novo, faltaId]);
       salvar();
       renderLista();
+      avisarMudanca('status');
 
       var api = nv();
       if (!api) { semNuvem(); return; }
@@ -554,6 +599,7 @@ window.ModuloFaltas = (function () {
       salvar();
       render();
       toast('Falta suprida', 'ok');
+      avisarMudanca('suprir');
 
       var api = nv();
       if (!api) { semNuvem(); return; }
@@ -658,23 +704,51 @@ window.ModuloFaltas = (function () {
     /* =======================================================
        IMPORTAÇÃO / EXPORTAÇÃO
     ======================================================= */
+    /* lê o que veio do arquivo OU colado da planilha.
+       Colar do Excel/Sheets vem separado por TAB (o lerCsv só conhece ; e ,);
+       sem cabeçalho assume 1ª coluna = código, 2ª = nome */
+    function prepararLista(texto) {
+      var t = String(texto == null ? '' : texto).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+      var ls = t.split('\n').filter(function (l) { return l.trim() !== ''; });
+      if (!ls.length) return { cabecalho: [], linhas: [] };
+      var cab1 = semAcento(ls[0]).toLowerCase();
+      var temCab = cab1.indexOf('codigo') >= 0 && cab1.indexOf('nome') >= 0;
+
+      if (ls[0].indexOf('\t') >= 0) {
+        var rows = ls.map(function (l) {
+          return l.split('\t').map(function (c) { return c.trim().replace(/^"(.*)"$/, '$1'); });
+        });
+        if (temCab) {
+          return { cabecalho: rows[0].map(function (h) { return semAcento(h).toLowerCase(); }),
+                   linhas: rows.slice(1) };
+        }
+        return { cabecalho: ['codigo', 'nome'], linhas: rows };
+      }
+      if (!temCab) {
+        var sep = ls[0].split(';').length >= ls[0].split(',').length ? ';' : ',';
+        return lerCsv('codigo' + sep + 'nome\n' + ls.join('\n'));
+      }
+      return lerCsv(ls.join('\n'));
+    }
+
+    /* devolve true se a importação local rodou (para limpar a caixa de colar) */
     function importarCsv(texto) {
       var res = $(id + 'CsvResultado');
-      var d = lerCsv(texto);
+      var d = prepararLista(texto);
       var iCod = d.cabecalho.indexOf('codigo');
       var iNome = d.cabecalho.indexOf('nome');
       if (iCod < 0 || iNome < 0) {
-        res.innerHTML = '&#9888; CSV sem as colunas "codigo" e "nome".';
-        return;
+        res.innerHTML = '&#9888; Não achei as colunas "codigo" e "nome".';
+        return false;
       }
 
-      var novos = 0, atualizados = 0, ordem = 0;
+      var novos = 0, atualizados = 0, ordem = 0, ignoradas = 0;
       db.run('BEGIN');
       try {
         d.linhas.forEach(function (l) {
           var codigo = String(l[iCod] || '').trim();
           var nome = String(l[iNome] || '').trim();
-          if (!codigo || !nome) return;
+          if (!codigo || !nome) { ignoradas++; return; }
           ordem++;
           var existe = um('SELECT codigo FROM componentes WHERE codigo = ?', [codigo]);
           if (existe) {
@@ -689,20 +763,27 @@ window.ModuloFaltas = (function () {
       } catch (e) {
         try { db.run('ROLLBACK'); } catch (e2) {}
         res.innerHTML = '&#9888; Falha ao importar: ' + esc(e.message);
-        return;
+        return false;
       }
       salvar(true);
       renderStats();
-      res.innerHTML = '&#10003; <b>' + novos + '</b> novos · <b>' + atualizados + '</b> atualizados. Enviando para a nuvem...';
+      var sufixo = ignoradas
+        ? '<br>&#9888; ' + ignoradas + ' linha(s) ignorada(s): sem código ou sem nome.' : '';
+      if (!novos && !atualizados) {
+        res.innerHTML = '&#9888; Nenhuma linha válida (precisa de código e nome em cada linha).' + sufixo;
+        return false;
+      }
+      res.innerHTML = '&#10003; <b>' + novos + '</b> novos · <b>' + atualizados + '</b> atualizados. Enviando para a nuvem...' + sufixo;
 
       var api = nv();
-      if (!api) { res.innerHTML += '<br>&#9888; Importado só neste aparelho - a nuvem recusou: sem login.'; return; }
+      if (!api) { res.innerHTML += '<br>&#9888; Importado só neste aparelho - a nuvem recusou: sem login.'; return true; }
       var lista = sel('SELECT codigo,nome,ordem FROM componentes ORDER BY ordem,codigo');
       api.enviarComponentes(lista).then(function () {
-        res.innerHTML = '&#10003; <b>' + novos + '</b> novos · <b>' + atualizados + '</b> atualizados · enviados para a nuvem.';
+        res.innerHTML = '&#10003; <b>' + novos + '</b> novos · <b>' + atualizados + '</b> atualizados · enviados para a nuvem.' + sufixo;
       }).catch(function (e) {
         res.innerHTML += '<br>&#9888; Importado aqui, mas falhou o envio: ' + esc(e.message);
       });
+      return true;
     }
 
     function exportarCsv() {
@@ -725,6 +806,7 @@ window.ModuloFaltas = (function () {
       db.run('DELETE FROM faltas; DELETE FROM componentes;');
       salvar(true);
       toast('Cópia local apagada', 'ok');
+      avisarMudanca('apagar-local');
       render();
     }
 
@@ -756,6 +838,7 @@ window.ModuloFaltas = (function () {
         salvar(true);
         toast(alvo ? 'Faltas de ' + labelAlmox(alvo) + ' zeradas' : 'Faltas zeradas', 'ok');
         render();
+        avisarMudanca('zerar');
         statusNuvem();
       })['catch'](function (e) {
         toast('Falha ao zerar: ' + e.message, 'err');
@@ -863,6 +946,17 @@ window.ModuloFaltas = (function () {
         w.addEventListener('click', function (ev) { if (ev.target === w) fecharSheets(); });
       });
 
+      /* Esc fecha a janela aberta (PC); Enter na quantidade adiciona a falta */
+      document.addEventListener('keydown', function (ev) {
+        if (ev.key !== 'Escape') return;
+        var aberta = $(id + 'SheetNova').classList.contains('open') ||
+                     $(id + 'SheetZerar').classList.contains('open');
+        if (aberta) fecharSheets();
+      });
+      $(id + 'Qtd').addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); adicionarFalta(); }
+      });
+
       /* lista: delegação, porque as linhas são recriadas a cada render */
       var lista = $(id + 'Lista');
       /* clicar no componente abre a linha, revelando o "Suprida" */
@@ -946,6 +1040,11 @@ window.ModuloFaltas = (function () {
         P.lerTexto(f, function (txt) { importarCsv(txt); });
         ev.target.value = '';
       });
+      $(id + 'ImportarColado').addEventListener('click', function () {
+        var ta = $(id + 'ColarCsv');
+        if (!ta.value.trim()) { toast('Cole primeiro as colunas código e nome', 'err'); return; }
+        if (importarCsv(ta.value)) ta.value = '';
+      });
 
       /* notificações */
       $(id + 'PushAtivar').addEventListener('click', function () {
@@ -972,7 +1071,7 @@ window.ModuloFaltas = (function () {
       cfg: cfg,
       preparar: function () {
         if (promessa) { promessa.then(function () { sincronizar(true); }); return promessa; }
-        promessa = abrirBanco().then(function () {
+        promessa = abrirBancoUmaVez().then(function () {
           montarUI();
           render();
           statusNuvem();
@@ -986,17 +1085,98 @@ window.ModuloFaltas = (function () {
         else if (nome === id + '-hist') { renderHistorico(false); }
         else if (nome === id + '-cfg') { renderStats(); statusNuvem(); }
       },
-      fecharSheets: function () { if (montado) fecharSheets(); }
+      fecharSheets: function () { if (montado) fecharSheets(); },
+
+      /* ---------- API publica sem DOM (usada pelo modulo Kits) ---------- */
+      garantirPronto: function () {
+        return abrirBancoUmaVez();
+      },
+      buscarComponente: function (codigo) {
+        return abrirBancoUmaVez().then(function () {
+          var cod = String(codigo || '').trim();
+          if (!cod) return null;
+          var c = um('SELECT codigo,nome FROM componentes WHERE codigo = ?', [cod]);
+          return c ? { codigo: c.codigo, nome: c.nome } : null;
+        });
+      },
+      sugerirComponentes: function (texto, limite) {
+        return abrirBancoUmaVez().then(function () {
+          var v = String(texto || '').trim();
+          var lim = Math.floor(Number(limite));
+          if (!(lim >= 1)) lim = 20;
+          if (lim > 200) lim = 200;
+          if (v.length < 2) return [];
+          var like = '%' + v.toUpperCase() + '%';
+          return sel(
+            'SELECT codigo,nome FROM componentes WHERE UPPER(codigo) LIKE ? OR UPPER(nome) LIKE ? ORDER BY codigo LIMIT ' + lim,
+            [like, like]
+          ).map(function (c) { return { codigo: c.codigo, nome: c.nome }; });
+        });
+      },
+      registrarExterno: function (dados) {
+        dados = dados || {};
+        return abrirBancoUmaVez().then(function () {
+          var codigo = String(dados.codigo || '').trim();
+          if (!codigo) throw new Error('Digite o código do componente');
+
+          var almox = String(dados.almox || '').trim().toLowerCase();
+          if (!ALMOX.some(function (a) { return a.cod === almox; })) {
+            throw new Error('Almoxarifado inválido: use "frente" ou "fundo"');
+          }
+
+          var qtd = 1;
+          if (dados.qtd !== undefined && dados.qtd !== null && dados.qtd !== '') {
+            qtd = num(dados.qtd);
+          }
+          if (!(qtd >= 1)) throw new Error('Quantidade inválida: informe um número maior ou igual a 1');
+
+          var nome = String(dados.nome || '').trim() || nomeDoCodigo(codigo);
+          if (!nome) throw new Error('Codigo nao cadastrado: informe o nome');
+
+          var r = gravarFalta(codigo, nome, qtd, almox);
+          return enviarFalta(r.registro).then(function (naNuvem) {
+            return {
+              id: r.registro.id,
+              codigo: r.registro.codigo,
+              nome: r.registro.nome,
+              qtd: r.registro.qtd,
+              almox: r.registro.almoxarifado,
+              existia: !!r.existente,
+              nuvem: naNuvem,
+              origem: dados.origem || ''
+            };
+          });
+        });
+      },
+      aoMudar: function (cb) {
+        if (typeof cb !== 'function') return function () {};
+        ouvintes.push(cb);
+        return function () {
+          var i = ouvintes.indexOf(cb);
+          if (i >= 0) ouvintes.splice(i, 1);
+        };
+      }
     };
   }
 
   var instancias = {};
+  function instanciaPadrao() {
+    if (!instancias.faltas) instancias.faltas = criarInstancia({ id: 'faltas' });
+    return instancias.faltas;
+  }
 
   return {
     obter: function (cfg) {
       if (!instancias[cfg.id]) instancias[cfg.id] = criarInstancia(cfg);
       return instancias[cfg.id];
     },
+    /* ---- API publica sem DOM: funciona sem a tela de Faltas ter sido
+       aberta. A instancia 'faltas' e a mesma que o app.js usa depois. ---- */
+    garantirPronto: function () { return instanciaPadrao().garantirPronto(); },
+    buscarComponente: function (codigo) { return instanciaPadrao().buscarComponente(codigo); },
+    sugerirComponentes: function (texto, limite) { return instanciaPadrao().sugerirComponentes(texto, limite); },
+    registrarExterno: function (dados) { return instanciaPadrao().registrarExterno(dados); },
+    aoMudar: function (cb) { return instanciaPadrao().aoMudar(cb); },
     aoMostrarView: function (nome) {
       Object.keys(instancias).forEach(function (k) { instancias[k].aoMostrarView(nome); });
     }

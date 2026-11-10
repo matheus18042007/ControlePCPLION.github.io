@@ -232,7 +232,8 @@ window.ModuloBanco = (function () {
       'contagem_combos', 'contagem_cores_opcoes',
       'eficiencia_colaboradores', 'eficiencia_dias',
       'faltas', 'faltas_componentes', 'faltas_notif_estado',
-      'push_subscriptions'
+      'push_subscriptions',
+      'kits_historico', 'kits_faltas'
     ];
 
     function baixarNuvem() {

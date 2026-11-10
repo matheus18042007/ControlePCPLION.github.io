@@ -81,6 +81,16 @@ window.MODULOS = [
     tipo: 'faltas'
   },
   {
+    id: 'kits',
+    nome: 'Kits',
+    desc: 'Separação de kits por máquina, com falta de componente',
+    icone: '📋',
+    titulo: 'Kits',
+    viewInicial: 'kits-lista',
+    pronto: true,
+    tipo: 'kits'
+  },
+  {
     id: 'banco',
     nome: 'Banco de Dados',
     desc: 'Backup completo, estrutura das tabelas, endereço da nuvem e notificações.',

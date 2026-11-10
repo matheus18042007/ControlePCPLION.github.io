@@ -419,9 +419,10 @@ window.ModuloContagem = (function () {
       /* ---------- sheets ---------- */
       var sheets = document.createElement('div');
       sheets.innerHTML = [
-        '<div id="' + id + 'SheetQtd" class="sheet-wrap" data-modulo="' + id + '">',
+        '<div id="' + id + 'SheetQtd" class="sheet-wrap janela-pc" data-modulo="' + id + '">',
         '  <div class="sheet">',
         '    <div class="sheet-handle"></div>',
+        '    <button class="janela-x" data-' + id + 'fechar="1" type="button" aria-label="Fechar">&times;</button>',
         '    <h3>Definir quantidade</h3>',
         '    <div class="mov-item">',
         '      <b id="' + id + 'QtdNome">-</b>',
@@ -488,9 +489,10 @@ window.ModuloContagem = (function () {
         ].join('\n') : ''),
         '  </div>',
         '</div>',
-        '<div id="' + id + 'SheetCad" class="sheet-wrap" data-modulo="' + id + '">',
+        '<div id="' + id + 'SheetCad" class="sheet-wrap janela-pc" data-modulo="' + id + '">',
         '  <div class="sheet">',
         '    <div class="sheet-handle"></div>',
+        '    <button class="janela-x" data-' + id + 'fechar="1" type="button" aria-label="Fechar">&times;</button>',
         '    <h3 id="' + id + 'CadTitulo">Novo item</h3>',
         '    <label class="lbl">Cod *</label>',
         '    <input id="' + id + 'CadCodigo" type="text" autocapitalize="characters" autocomplete="off">',
@@ -1505,6 +1507,11 @@ window.ModuloContagem = (function () {
       $(id + 'CadSalvar').addEventListener('click', salvarCadastro);
       P.qsa('[data-' + id + 'fechar]').forEach(function (b) {
         b.addEventListener('click', fecharSheets);
+      });
+      /* Esc fecha a janela aberta (PC) */
+      document.addEventListener('keydown', function (ev) {
+        if (ev.key !== 'Escape') return;
+        if ($(id + 'SheetQtd').classList.contains('open') || $(id + 'SheetCad').classList.contains('open')) fecharSheets();
       });
 
       /* configurações */

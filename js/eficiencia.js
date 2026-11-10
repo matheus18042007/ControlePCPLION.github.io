@@ -262,9 +262,10 @@ window.ModuloEficiencia = (function () {
       /* ---------- sheet de cadastro ---------- */
       var sheets = document.createElement('div');
       sheets.innerHTML = [
-        '<div id="' + id + 'SheetCad" class="sheet-wrap" data-modulo="' + id + '">',
+        '<div id="' + id + 'SheetCad" class="sheet-wrap janela-pc" data-modulo="' + id + '">',
         '  <div class="sheet">',
         '    <div class="sheet-handle"></div>',
+        '    <button class="janela-x" data-' + id + '-fechar="1" type="button" aria-label="Fechar">&times;</button>',
         '    <h3 id="' + id + 'CadTitulo">Novo colaborador</h3>',
         '    <label class="lbl">Setor *</label>',
         '    <input id="' + id + 'CadSetor" type="text" autocomplete="off" list="' + id + 'Setores">',
@@ -927,6 +928,10 @@ window.ModuloEficiencia = (function () {
       $(id + 'CadSalvar').addEventListener('click', salvarCadastro);
       qsa('[data-' + id + '-fechar]').forEach(function (b) {
         b.addEventListener('click', fecharSheets);
+      });
+      /* Esc fecha a janela aberta (PC) */
+      document.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape' && $(id + 'SheetCad').classList.contains('open')) fecharSheets();
       });
 
       /* configurações */

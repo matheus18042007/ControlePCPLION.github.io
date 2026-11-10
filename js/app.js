@@ -5,7 +5,7 @@
 (function () {
 'use strict';
 
-var APP_VERSION = '2.0';
+var APP_VERSION = '2.7';
 
 /* ---------------------------------------------------------
    Atalhos DOM
@@ -298,6 +298,9 @@ function modsDoUsuario() {
 }
 
 function podeVer(m) {
+  /* regra central em Auth.podeVer (sem sessao/sem mods = ve tudo;
+     "edita" implica ver). Fallback: regra antiga so por "mods". */
+  if (window.Auth && typeof Auth.podeVer === 'function') return Auth.podeVer(m.id);
   var mods = modsDoUsuario();
   if (!mods) return true;
   return mods.indexOf(m.id) !== -1;
@@ -310,6 +313,7 @@ function motorDoTipo(tipo) {
   if (tipo === 'contagem') return window.ModuloContagem;
   if (tipo === 'eficiencia') return window.ModuloEficiencia;
   if (tipo === 'faltas') return window.ModuloFaltas;
+  if (tipo === 'kits') return window.ModuloKits;
   if (tipo === 'banco') return window.ModuloBanco;
   return null;
 }
@@ -320,7 +324,8 @@ window.motorDoTipo = motorDoTipo;
 
 function motoresAtivos() {
   return [window.ModuloContagem, window.ModuloEficiencia,
-          window.ModuloFaltas, window.ModuloBanco].filter(Boolean);
+          window.ModuloFaltas, window.ModuloKits,
+          window.ModuloBanco].filter(Boolean);
 }
 
 /* app.js roda dentro de um IIFE, entao MODULOS era invisivel para os outros
@@ -867,7 +872,7 @@ function pararScanner() {
    IMPORTAÇÃO CSV
 --------------------------------------------------------- */
 function parseCSV(texto) {
-  texto = texto.replace(/^﻿/, '').replace(/\r\n?/g, '\n');
+  texto = texto.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
   var primeiraLinha = texto.split('\n')[0] || '';
   var sep = (primeiraLinha.split(';').length > primeiraLinha.split(',').length) ? ';' :
             ((primeiraLinha.split('\t').length > primeiraLinha.split(',').length) ? '\t' : ',');
@@ -1010,7 +1015,7 @@ function lerTexto(file, cb) {
       try { txt = new TextDecoder('windows-1252').decode(buf); }
       catch (e2) { txt = new TextDecoder('utf-8').decode(buf); }
     }
-    cb(repararMojibake(txt.replace(/^﻿/, '')));
+    cb(repararMojibake(txt.replace(/^\uFEFF/, '')));
   };
   fr.readAsArrayBuffer(file);
 }
@@ -1039,7 +1044,7 @@ function csvDe(colunas, linhas) {
   };
   var out = [colunas.join(';')];
   linhas.forEach(function (r) { out.push(colunas.map(function (c) { return q(r[c]); }).join(';')); });
-  return '﻿' + out.join('\r\n');
+  return '\uFEFF' + out.join('\r\n');
 }
 function exportarItensCSV() {
   var cols = ['codigo', 'nome', 'descricao', 'unidade_medida', 'estoque_atual', 'estoque_minimo', 'data_cadastro'];
@@ -1231,6 +1236,15 @@ function ligarEventos() {
 
   qsa('.sheet-wrap').forEach(function (w) {
     w.addEventListener('click', function (e) { if (e.target === w) fecharSheets(); });
+  });
+
+  /* janela flutuante (PC): botao X e tecla Esc fecham as sheets do app */
+  qsa('#sheetMov [data-janela-fechar], #sheetItem [data-janela-fechar]').forEach(function (b) {
+    b.addEventListener('click', fecharSheets);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if ($('sheetMov').classList.contains('open') || $('sheetItem').classList.contains('open')) fecharSheets();
   });
 
   /* dados */
