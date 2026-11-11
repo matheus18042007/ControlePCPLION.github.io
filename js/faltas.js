@@ -543,14 +543,34 @@ window.ModuloFaltas = (function () {
 
     /* envia a falta para a nuvem e bate na porta da Edge Function de
        notificação. Resolve true/false (enviou ou não); nunca rejeita. */
-    function enviarFalta(registro) {
+    /* Falta de kit espera 1 min antes de notificar: da tempo do operador
+       corrigir codigo/qtd. A funcao segura a falta (notificar_apos) e o
+       app bate na porta de novo quando o minuto passa. */
+    var ESPERA_KITS_S = 60;
+
+    function notificarDepoisDaEspera(faltaId) {
+      if (!window.Nuvem || !Nuvem.push) return;
+      Nuvem.push.notificar(id, false, { segurar: String(faltaId), segundos: ESPERA_KITS_S });
+      setTimeout(function () {
+        Nuvem.push.notificar(id).then(function (r) {
+          /* ainda no cooldown de outra notificacao: tenta de novo quando liberar */
+          if (r && r.pendentes > 0 && r.proximoEnvioEm) {
+            var ms = new Date(r.proximoEnvioEm).getTime() - Date.now() + 1500;
+            if (ms > 0 && ms < 120000) setTimeout(function () { Nuvem.push.notificar(id); }, ms);
+          }
+        });
+      }, (ESPERA_KITS_S + 2) * 1000);
+    }
+
+    function enviarFalta(registro, esperar) {
       var api = nv();
       if (!api) { semNuvem(); return Promise.resolve(false); }
       return api.registrar(registro, P.operador()).then(function () {
         statusNuvem();
         /* bate na porta da Edge Function: ela decide se já
            passou 1 min do cooldown. Nunca derruba nada. */
-        Nuvem.push.notificar(id);
+        if (esperar) notificarDepoisDaEspera(registro.id);
+        else Nuvem.push.notificar(id);
         return true;
       }).catch(function (e) {
         statusNuvem();
@@ -1088,11 +1108,24 @@ window.ModuloFaltas = (function () {
       fecharSheets: function () { if (montado) fecharSheets(); },
 
       /* ---------- API publica sem DOM (usada pelo modulo Kits) ---------- */
+      /* banco aberto + componentes puxados da nuvem, sem precisar da tela
+         de Faltas. Se a sincronização falhar (offline), tenta de novo na
+         próxima chamada e segue com o cache local. */
       garantirPronto: function () {
-        return abrirBancoUmaVez();
+        if (!promessaPronto) {
+          promessaPronto = abrirBancoUmaVez().then(function () {
+            return sincronizar(true);
+          }).then(function (ok) {
+            if (!ok) promessaPronto = null;
+          }, function (e) {
+            promessaPronto = null;
+            throw e;
+          });
+        }
+        return promessaPronto;
       },
       buscarComponente: function (codigo) {
-        return abrirBancoUmaVez().then(function () {
+        return this.garantirPronto().then(function () {
           var cod = String(codigo || '').trim();
           if (!cod) return null;
           var c = um('SELECT codigo,nome FROM componentes WHERE codigo = ?', [cod]);
@@ -1100,7 +1133,7 @@ window.ModuloFaltas = (function () {
         });
       },
       sugerirComponentes: function (texto, limite) {
-        return abrirBancoUmaVez().then(function () {
+        return this.garantirPronto().then(function () {
           var v = String(texto || '').trim();
           var lim = Math.floor(Number(limite));
           if (!(lim >= 1)) lim = 20;
@@ -1115,7 +1148,7 @@ window.ModuloFaltas = (function () {
       },
       registrarExterno: function (dados) {
         dados = dados || {};
-        return abrirBancoUmaVez().then(function () {
+        return this.garantirPronto().then(function () {
           var codigo = String(dados.codigo || '').trim();
           if (!codigo) throw new Error('Digite o código do componente');
 
@@ -1134,7 +1167,7 @@ window.ModuloFaltas = (function () {
           if (!nome) throw new Error('Codigo nao cadastrado: informe o nome');
 
           var r = gravarFalta(codigo, nome, qtd, almox);
-          return enviarFalta(r.registro).then(function (naNuvem) {
+          return enviarFalta(r.registro, dados.origem === 'kits').then(function (naNuvem) {
             return {
               id: r.registro.id,
               codigo: r.registro.codigo,
@@ -1145,6 +1178,100 @@ window.ModuloFaltas = (function () {
               nuvem: naNuvem,
               origem: dados.origem || ''
             };
+          });
+        });
+      },
+      /* dados atuais de uma falta (para preencher o formulario de edicao) */
+      obterFalta: function (faltaId) {
+        return this.garantirPronto().then(function () {
+          var f = um('SELECT * FROM faltas WHERE id = ?', [String(faltaId)]);
+          if (!f) return null;
+          return {
+            id: f.id, codigo: f.codigo, nome: f.nome || '',
+            qtd: Number(f.qtd) || 0, almox: normAlmox(f.almoxarifado)
+          };
+        });
+      },
+      /* corrige codigo / nome / quantidade / almoxarifado de uma falta */
+      editarExterno: function (dados) {
+        dados = dados || {};
+        return this.garantirPronto().then(function () {
+          var fid = String(dados.id || '');
+          var atual = fid ? um('SELECT * FROM faltas WHERE id = ?', [fid]) : null;
+          if (!atual) throw new Error('Falta não encontrada no módulo de faltas');
+
+          var codigo = String(dados.codigo || '').trim();
+          if (!codigo) throw new Error('Digite o código do componente');
+
+          var almox = String(dados.almox || '').trim().toLowerCase() || normAlmox(atual.almoxarifado);
+          if (!ALMOX.some(function (a) { return a.cod === almox; })) {
+            throw new Error('Almoxarifado inválido: use "frente" ou "fundo"');
+          }
+
+          var qtd = num(dados.qtd);
+          if (!(qtd >= 1)) throw new Error('Quantidade inválida: informe um número maior ou igual a 1');
+
+          var nome = String(dados.nome || '').trim() || nomeDoCodigo(codigo);
+          if (!nome) throw new Error('Codigo nao cadastrado: informe o nome');
+
+          /* uma falta por codigo + almoxarifado: nao deixa virar duplicada */
+          var outra = acharFalta(codigo, almox);
+          if (outra && String(outra.id) !== fid) {
+            throw new Error('Já existe falta de ' + codigo + ' neste almoxarifado. Edite aquela ou exclua.');
+          }
+
+          db.run('UPDATE faltas SET codigo = ?, nome = ?, qtd = ?, almoxarifado = ? WHERE id = ?',
+            [codigo, nome, qtd, almox, fid]);
+          salvar();
+          render();
+          avisarMudanca('editar');
+
+          var registro = {
+            id: atual.id, codigo: codigo, nome: nome, qtd: qtd, status: atual.status,
+            almoxarifado: almox, criado_em: atual.criado_em, criado_por: atual.criado_por || null
+          };
+          var resultado = {
+            id: registro.id, codigo: codigo, nome: nome, qtd: qtd, almox: almox,
+            codigoAnterior: atual.codigo
+          };
+
+          var api = nv();
+          if (!api) { semNuvem(); resultado.nuvem = false; return resultado; }
+          return api.registrar(registro, P.operador()).then(function () {
+            statusNuvem();
+            resultado.nuvem = true;
+            return resultado;
+          }, function (e) {
+            statusNuvem();
+            resultado.nuvem = false;
+            resultado.erroNuvem = (e && e.message) || 'falha na nuvem';
+            return resultado;
+          });
+        });
+      },
+      /* apaga uma falta lancada errado (local e nuvem; a nuvem tambem
+         limpa os vinculos com kits) */
+      excluirExterno: function (dados) {
+        dados = dados || {};
+        return this.garantirPronto().then(function () {
+          var fid = String(dados.id || '');
+          var atual = fid ? um('SELECT id FROM faltas WHERE id = ?', [fid]) : null;
+          if (!atual) throw new Error('Falta não encontrada no módulo de faltas');
+
+          estado.hist = null;
+          db.run('DELETE FROM faltas WHERE id = ?', [fid]);
+          salvar();
+          render();
+          avisarMudanca('excluir');
+
+          var api = nv();
+          if (!api) { semNuvem(); return { id: fid, nuvem: false }; }
+          return api.excluir(fid, P.operador()).then(function () {
+            statusNuvem();
+            return { id: fid, nuvem: true };
+          }, function (e) {
+            statusNuvem();
+            return { id: fid, nuvem: false, erroNuvem: (e && e.message) || 'falha na nuvem' };
           });
         });
       },
@@ -1176,6 +1303,9 @@ window.ModuloFaltas = (function () {
     buscarComponente: function (codigo) { return instanciaPadrao().buscarComponente(codigo); },
     sugerirComponentes: function (texto, limite) { return instanciaPadrao().sugerirComponentes(texto, limite); },
     registrarExterno: function (dados) { return instanciaPadrao().registrarExterno(dados); },
+    obterFalta: function (faltaId) { return instanciaPadrao().obterFalta(faltaId); },
+    editarExterno: function (dados) { return instanciaPadrao().editarExterno(dados); },
+    excluirExterno: function (dados) { return instanciaPadrao().excluirExterno(dados); },
     aoMudar: function (cb) { return instanciaPadrao().aoMudar(cb); },
     aoMostrarView: function (nome) {
       Object.keys(instancias).forEach(function (k) { instancias[k].aoMostrarView(nome); });

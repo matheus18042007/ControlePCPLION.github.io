@@ -294,7 +294,7 @@ window.ModuloKits = (function () {
       linhas: null, faltas: {}, t: 0, sync: 0,
       filtro: '', busca: '',
       carregando: false, promessa: null, erro: '',
-      alvo: null, ocupado: false, almFalta: 'frente', nomeAuto: false,
+      alvo: null, ocupado: false, almFalta: 'frente', nomeAuto: false, editando: null,
       hist: null, histT: 0, histBusca: '', histCarregando: false, histErro: ''
     };
     var cacheAba = {};
@@ -486,7 +486,7 @@ window.ModuloKits = (function () {
         '  <div class="sheet">',
         '    <div class="sheet-handle"></div>',
         '    <button class="janela-x" type="button" aria-label="Fechar">&times;</button>',
-        '    <h3>Registrar falta de componente</h3>',
+        '    <h3 id="' + id + 'FTitulo">Registrar falta de componente</h3>',
         '    <p id="' + id + 'FaltaKit" class="muted small kit-falta-janela-kit"></p>',
         '    <div id="' + id + 'FaltaForm" class="kit-falta-form aberto">',
         '      <label class="lbl">Código do componente</label>',
@@ -502,6 +502,7 @@ window.ModuloKits = (function () {
         '        <button type="button" data-alm="frente" class="on">Frente</button>',
         '        <button type="button" data-alm="fundo">Fundo</button>',
         '      </div>',
+        '      <button id="' + id + 'FExcluir" class="btn ghost block kit-falta-excluir" type="button" hidden>Excluir esta falta</button>',
         '      <div class="sheet-actions">',
         '        <button id="' + id + 'FCancela" class="btn ghost" type="button">Cancelar</button>',
         '        <button id="' + id + 'FSalvar" class="btn primary" type="button">Registrar falta</button>',
@@ -539,6 +540,14 @@ window.ModuloKits = (function () {
     function fecharFormFalta() {
       var f = $(id + 'SheetFalta');
       if (f) f.classList.remove('open');
+      estado.editando = null;
+    }
+
+    /* o mesmo formulário serve para registrar (modo novo) e corrigir (modo edição) */
+    function modoFormFalta(editando) {
+      $(id + 'FTitulo').textContent = editando ? 'Editar falta' : 'Registrar falta de componente';
+      $(id + 'FSalvar').textContent = editando ? 'Salvar alterações' : 'Registrar falta';
+      $(id + 'FExcluir').hidden = !editando;
     }
 
     /* =========================================================
@@ -688,12 +697,17 @@ window.ModuloKits = (function () {
       $(id + 'DetTitulo').textContent = l.produto || '(sem produto)';
 
       var fs = faltasDe(l);
+      var podeEditarFalta = pode && l.estado !== 'separado';
       var fh = fs.length ? fs.map(function (f) {
         var q = fmtQtd(f.qtd);
         return '<div class="kit-falta-item"><b>' + esc(f.codigo) + '</b>' +
           (q ? '<span class="kit-falta-qtd">faltam ' + esc(q) + '</span>' : '') +
           '<span class="muted small">' + (f.criado_por ? esc(f.criado_por) + ' - ' : '') +
-          esc(f.criado_em ? P.fmtDataHora(f.criado_em) : 'agora') + '</span></div>';
+          esc(f.criado_em ? P.fmtDataHora(f.criado_em) : 'agora') + '</span>' +
+          (podeEditarFalta
+            ? '<button class="btn ghost kit-falta-edit" type="button" data-falta-edit="' + esc(f.falta_id) + '">Editar</button>'
+            : '') +
+          '</div>';
       }).join('') : '<div class="muted small">Nenhuma falta registrada para este kit.</div>';
 
       $(id + 'DetCorpo').innerHTML =
@@ -764,6 +778,8 @@ window.ModuloKits = (function () {
       $(id + 'FDica').textContent = '';
       $(id + 'FLista').innerHTML = '';
       estado.nomeAuto = false;
+      estado.editando = null;
+      modoFormFalta(false);
       definirAlmFalta('frente');
       $(id + 'FaltaKit').textContent = (estado.alvo.carga ? estado.alvo.carga + ' - ' : '') +
         (estado.alvo.produto || '');
@@ -813,7 +829,138 @@ window.ModuloKits = (function () {
       }, 250);
     }
 
+    /* abre o formulário preenchido com os dados da falta para corrigir */
+    function abrirEditarFalta(faltaId) {
+      var l = estado.alvo;
+      var F = window.ModuloFaltas;
+      if (!l || !podeEditar() || l.estado === 'separado') return;
+      if (!F) { toast('Módulo de faltas indisponível', 'err'); return; }
+      var fid = String(faltaId);
+      var vinc = faltasDe(l).filter(function (f) { return String(f.falta_id) === fid; })[0];
+      if (!vinc) return;
+
+      F.obterFalta(fid).then(function (f) {
+        if (!f) { toast('Falta não encontrada no módulo de faltas', 'err'); return; }
+        $(id + 'FCodigo').value = f.codigo;
+        $(id + 'FNome').value = f.nome || '';
+        $(id + 'FQtd').value = String(f.qtd);
+        $(id + 'FDica').textContent = 'Esta falta é a mesma do módulo Faltas: a alteração vale para todos os kits ligados a ela.';
+        $(id + 'FLista').innerHTML = '';
+        estado.nomeAuto = false;
+        estado.editando = { falta_id: fid, codigo: f.codigo };
+        modoFormFalta(true);
+        definirAlmFalta(f.almox);
+        $(id + 'FaltaKit').textContent = (l.carga ? l.carga + ' - ' : '') + (l.produto || '');
+        $(id + 'SheetFalta').classList.add('open');
+        setTimeout(function () { var c = $(id + 'FCodigo'); if (c) c.focus(); }, 120);
+      })['catch'](function (e) {
+        toast((e && e.message) || 'Falha ao abrir a falta', 'err');
+      });
+    }
+
+    /* acerta codigo/qtd da falta em todos os caches locais */
+    function atualizarFaltaLocal(fid, codigo, qtd) {
+      function acerta(lista) {
+        (lista || []).forEach(function (f) {
+          if (String(f.falta_id) === String(fid)) { f.codigo = codigo; f.qtd = qtd; }
+        });
+      }
+      Object.keys(cacheAba).forEach(function (a) { acerta(cacheAba[a].faltas); });
+      Object.keys(estado.faltas || {}).forEach(function (k) { acerta(estado.faltas[k]); });
+    }
+
+    function removerFaltaLocal(fid) {
+      function sem(lista) {
+        return (lista || []).filter(function (f) { return String(f.falta_id) !== String(fid); });
+      }
+      Object.keys(cacheAba).forEach(function (a) {
+        var c = cacheAba[a];
+        c.faltas = sem(c.faltas);
+        if (a === estado.aba) estado.faltas = agruparFaltas(c.faltas, c.linhas);
+      });
+      if (!cacheAba[estado.aba]) {
+        Object.keys(estado.faltas || {}).forEach(function (k) { estado.faltas[k] = sem(estado.faltas[k]); });
+      }
+    }
+
+    function fimEdicao(btn, texto) {
+      estado.ocupado = false;
+      btn.disabled = false;
+      btn.textContent = texto;
+      $(id + 'FExcluir').disabled = false;
+    }
+
+    function salvarEdicaoFalta() {
+      if (estado.ocupado || !estado.editando) return;
+      var F = window.ModuloFaltas;
+      if (!F) { toast('Módulo de faltas indisponível', 'err'); return; }
+      var ed = estado.editando;
+      var codigo = $(id + 'FCodigo').value.trim();
+      var nome = $(id + 'FNome').value.trim();
+      var qtd = Number(String($(id + 'FQtd').value).replace(',', '.'));
+      if (!codigo) { toast('Digite o código do componente', 'err'); return; }
+      if (!(qtd >= 1)) { toast('Quantidade deve ser 1 ou mais', 'err'); return; }
+
+      var btn = $(id + 'FSalvar');
+      estado.ocupado = true;
+      btn.disabled = true;
+      $(id + 'FExcluir').disabled = true;
+      btn.textContent = 'Salvando...';
+
+      F.editarExterno({ id: ed.falta_id, codigo: codigo, nome: nome, qtd: qtd, almox: estado.almFalta })
+        .then(function (r) {
+          if (r.codigo === ed.codigo) return { r: r, vinculo: 'ok' };
+          return nv().kitsFaltaAtualizarCodigo(ed.falta_id, r.codigo).then(function () {
+            return { r: r, vinculo: 'ok' };
+          }, function (e) {
+            return { r: r, vinculo: 'erro', erro: msgErro(e) };
+          });
+        }).then(function (res) {
+          atualizarFaltaLocal(ed.falta_id, res.r.codigo, res.r.qtd);
+          if (res.vinculo === 'erro') {
+            toast('Falta salva, mas o código no kit não foi atualizado: ' + res.erro, 'err');
+          } else if (res.r.nuvem === false) {
+            toast('Falta salva neste aparelho; falhou na nuvem: ' + (res.r.erroNuvem || 'sem conexão'), 'err');
+          } else {
+            toast('Falta atualizada', 'ok');
+          }
+          fecharFormFalta();
+          pintarDetalhe();
+          renderLista();
+        })['catch'](function (e) {
+          toast((e && e.message) || 'Falha ao editar a falta', 'err');
+        }).then(function () { fimEdicao(btn, 'Salvar alterações'); });
+    }
+
+    function excluirFaltaEditando() {
+      if (estado.ocupado || !estado.editando) return;
+      var F = window.ModuloFaltas;
+      if (!F) { toast('Módulo de faltas indisponível', 'err'); return; }
+      var ed = estado.editando;
+      if (!window.confirm('Excluir a falta de ' + ed.codigo + '? Ela sai do módulo Faltas e de todos os kits ligados a ela.')) return;
+
+      var btn = $(id + 'FSalvar');
+      estado.ocupado = true;
+      btn.disabled = true;
+      $(id + 'FExcluir').disabled = true;
+
+      F.excluirExterno({ id: ed.falta_id }).then(function (r) {
+        removerFaltaLocal(ed.falta_id);
+        if (r.nuvem === false) {
+          toast('Falta excluída neste aparelho; falhou na nuvem: ' + (r.erroNuvem || 'sem conexão'), 'err');
+        } else {
+          toast('Falta excluída', 'ok');
+        }
+        fecharFormFalta();
+        pintarDetalhe();
+        renderLista();
+      })['catch'](function (e) {
+        toast((e && e.message) || 'Falha ao excluir a falta', 'err');
+      }).then(function () { fimEdicao(btn, 'Salvar alterações'); });
+    }
+
     function salvarFalta() {
+      if (estado.editando) { salvarEdicaoFalta(); return; }
       if (estado.ocupado) return;
       var l = estado.alvo;
       var F = window.ModuloFaltas;
@@ -995,6 +1142,8 @@ window.ModuloKits = (function () {
         if (ev.target.closest('.janela-x')) { fecharSheets(); return; }
         if (ev.target.closest('#' + id + 'DetFechar')) { fecharSheets(); return; }
         if (ev.target.closest('#' + id + 'DetFalta')) { abrirFormFalta(); return; }
+        var be = ev.target.closest('[data-falta-edit]');
+        if (be) { abrirEditarFalta(be.getAttribute('data-falta-edit')); return; }
         if (ev.target.closest('#' + id + 'DetSeparar')) {
           if (estado.alvo) abrirSeparar(estado.alvo.linha);
         }
@@ -1006,6 +1155,7 @@ window.ModuloKits = (function () {
         if (b) definirAlmFalta(b.getAttribute('data-alm'));
       });
       $(id + 'FSalvar').addEventListener('click', salvarFalta);
+      $(id + 'FExcluir').addEventListener('click', excluirFaltaEditando);
 
       /* janela de registrar falta: fecha só ela, o detalhe do kit continua atrás */
       var sf = $(id + 'SheetFalta');

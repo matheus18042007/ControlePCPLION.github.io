@@ -754,8 +754,10 @@ var Nuvem = (function () {
 
     /* dispara o flush. Nunca deve derrubar quem chamou:
        falta registrada vale mais que notificacao entregue. */
-    notificar: function (modulo, forcar) {
+    notificar: function (modulo, forcar, extra) {
       if (!ativa()) return Promise.resolve(null);
+      var corpo = { modulo: modulo || 'faltas', forcar: !!forcar };
+      if (extra) { for (var k in extra) { if (Object.prototype.hasOwnProperty.call(extra, k)) corpo[k] = extra[k]; } }
       var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
       var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 15000) : null;
 
@@ -766,7 +768,7 @@ var Nuvem = (function () {
           Authorization: 'Bearer ' + cfg.key,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ modulo: modulo || 'faltas', forcar: !!forcar }),
+        body: JSON.stringify(corpo),
         cache: 'no-store',
         signal: ctrl ? ctrl.signal : undefined
       }).then(function (r) {
@@ -874,6 +876,15 @@ var Nuvem = (function () {
     });
   }
 
+  /* a falta mudou de componente: acerta o codigo guardado nos vinculos
+     (exige supabase/patch_kits_editar_falta.sql) */
+  function kitsFaltaAtualizarCodigo(faltaId, codigo) {
+    return req('/rpc/kits_atualizar_codigo_falta', {
+      method: 'POST',
+      body: { p_falta_id: String(faltaId), p_codigo: codigo }
+    });
+  }
+
   /* para o badge de falta nos kits da aba */
   function kitsFaltasDe(aba) {
     return puxarPaginado('/kits_faltas?select=*&aba=eq.' + encodeURIComponent(aba) + '&order=id').then(function (lista) {
@@ -926,6 +937,7 @@ var Nuvem = (function () {
     kitsHistorico: kitsHistorico,
     kitsFaltaVincular: kitsFaltaVincular,
     kitsFaltaDesvincular: kitsFaltaDesvincular,
+    kitsFaltaAtualizarCodigo: kitsFaltaAtualizarCodigo,
     kitsFaltasDe: kitsFaltasDe,
     ativa: ativa,
     conectado: conectado,

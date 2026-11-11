@@ -557,3 +557,9 @@ input:focus{border-color:var(--accent)}
 .kit-falta-form{display:none;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
 .kit-falta-form.aberto{display:block}
 .kit-falta-form input{display:block;width:100%;margin-bottom:8px}
+
+/* kits: botao editar ao lado de cada falta e excluir dentro do formulario */
+.kit-falta-item{align-items:center}
+.kit-falta-edit{width:auto;flex:0 0 auto;padding:4px 12px;min-height:0;font-size:13px}
+.kit-falta-excluir{margin-top:10px;color:var(--danger,#c0392b);border-color:currentColor}
+.kit-falta-excluir[hidden]{display:none}

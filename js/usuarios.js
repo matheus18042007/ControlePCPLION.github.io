@@ -7,7 +7,7 @@
    este arquivo nao serve para nada.
 
    Usuarios: Matheus movio, Alan Marques, joao victor, Kauã, Gabriel B., Gabriel Kirschner, cesar, Norrany, Almoxarifado Frente
-   Gerado em: 11/11/2026, 14:12:05
+   Gerado em: 11/11/2026, 14:11:22
    ========================================================= */
 var COFRE = {
   "v": 1,
