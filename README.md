@@ -4,7 +4,7 @@ PWA (app instalável) de controle de chão de fábrica. Roda 100% no navegador �
 HTML + CSS + JavaScript puro, sem framework, sem build. Funciona offline e
 sincroniza com o Supabase quando tem internet.
 
-Versão atual: **2.0** (`APP_VERSION` em `js/app.js`, `CACHE_VERSION` em `sw.js`).
+Versão atual: **2.7** (`APP_VERSION` em `js/app.js`, `CACHE_VERSION` em `sw.js`).
 
 ---
 
@@ -22,7 +22,7 @@ o outro.
 | 🛡️ Carenagens VG | `carenagem` | Contagem cíclica de carenagens, contada por cor, com foto de referência | `pcp_carenagem` | idem, modulo=`carenagem` (+ `contagem_fotos`) |
 | ⏱️ Eficiência VG | `eficiencia` | Faltas e horas extras do dia, por setor. Histórico de 10 dias | `pcp_eficiencia` | `eficiencia_colaboradores`, `eficiencia_dias` |
 | ⚠️ Faltas VG | `faltas` | Registro de faltas de peças, com base de componentes e aviso por push | `pcp_faltas` | `faltas`, `faltas_componentes` |
-| 📦 Kits | `kits` | Separação de kits por máquina, com falta de componente (abas Kits e Histórico). Edição só para quem tem o id em `edita` no cofre (admin.html) | `pcp_kits` | `kits_historico`, `kits_faltas` (`supabase/patch_kits.sql`); planilha via Apps Script (`patch_kits_sync.sql`) |
+| 📦 Kits | `kits` | Separação de kits por máquina, com falta de componente (abas Kits e Histórico). Edição só para quem tem o id em `edita` no cofre (admin.html) | `pcp_kits` | `kits_historico`, `kits_faltas` (`supabase/patch_kits.sql`); espelho da planilha `kits_linhas`, `kits_sync`, `kits_fila`, `kits_config` (`patch_kits_sync.sql`) |
 | ⚙️ Banco de Dados | `banco` | Backup de todos os módulos, estrutura das tabelas, nuvem e notificações (módulo restrito) | nenhum próprio (lê os bancos dos outros módulos) | todas, só leitura (backup em CSV) |
 
 ### Como adicionar um módulo novo
@@ -32,6 +32,29 @@ o outro.
 2. registrar o módulo em `MODULOS` (`js/modulos.js`);
 3. se for do tipo `contagem`, **nada mais precisa ser escrito** — o motor
    genérico `js/contagem.js` monta tela e banco a partir do `cfg`.
+
+### Janelas no PC
+
+Em tela larga (a partir de 900 px) os formulários e detalhes abrem como **janela
+flutuante**: centralizada, sobre fundo escurecido, com título e botão **X** no
+canto. No celular continua a gaveta que sobe de baixo. É o mesmo `.sheet-wrap` de
+antes, só com a classe `janela-pc`.
+
+- Fechar: botão X, tecla **Esc** ou clique no fundo escuro. No Kits o Esc fecha em
+  camadas (primeiro a falta, depois a confirmação de separar, depois o detalhe).
+- Limitação conhecida: no Contagem (Definir quantidade, Novo item) e na
+  Eficiência (Novo colaborador) o clique no fundo ainda não fecha; X e Esc
+  funcionam. O botão voltar do Android também não fecha as janelas dos módulos.
+- Onde existem: Almoxarifado (Entrada, Novo item), Contagem (Definir quantidade,
+  Novo item), Eficiência (Novo colaborador), Faltas (Registrar falta, Zerar
+  faltas) e Kits (detalhe do kit, Registrar falta de componente, Separar kit).
+  O módulo Banco de Dados não tem janelas.
+- CSS: bloco "janela" em `css/styles.css` (`.janela-pc`, `.janela-x`, animação
+  `janela`, regra `@media (min-width:900px)`). Largura máxima 560 px; fica acima
+  do conteúdo (z-index 60) e abaixo do aviso toast (80).
+- Para criar uma janela nova: no `.sheet-wrap` acrescentar `janela-pc`, pôr
+  `<button class="janela-x" aria-label="Fechar" type="button">&times;</button>`
+  e ligar X, Esc e clique no fundo no módulo (copiar de `js/faltas.js`).
 
 ---
 
@@ -318,7 +341,7 @@ novidade.
 
 A função:
 - olha `faltas_notif_estado.ultimo_envio`;
-- se passaram ≥ 10 min e há faltas com `notificada_em is null`, monta **uma**
+- se passou o intervalo mínimo (1 minuto, constante `COOLDOWN_MIN` na função) e há faltas com `notificada_em is null`, monta **uma**
   notificação agregada ("3 novas faltas: 4471 SUPORTE BANCO, ...") e faz
   fan-out em lotes de 100;
 - se não passaram, não envia nada — as faltas ficam pendentes e vão juntas no
@@ -360,51 +383,99 @@ Sem isso o módulo funciona inteiro — só não notifica.
 
 Separação de kits de componentes por máquina. A fonte da verdade é a planilha
 Google "PROGRAMAÇÃO DIÁRIA OPERACIONAL - 2026" (uma aba por semana, ex.:
-`2ª SEM NOV`); o banco guarda só o histórico e o vínculo com as faltas.
+`2ª SEM NOV`). O app não lê a planilha direto: um Apps Script dentro da planilha
+copia as linhas para o Supabase (espelho `kits_linhas`) e o app lê esse espelho.
+O banco também guarda o histórico de separações e o vínculo com as faltas.
 
 ### Fluxo
 
 1. O almoxarifado marca `TRUE` na coluna **KIT** da planilha (kit liberado).
-2. No app o kit fica clicável. Quem separa toca em **Separar** e o app grava
-   `TRUE` na coluna **ALMOX. FRENTE** pela API.
-3. Estados: **separado** = `ALMOX. FRENTE` marcada (com ou sem KIT) · **liberado**
-   = só `KIT` marcado · **aguardando** = nenhuma das duas.
-4. **Falta no kit:** digitando o código, o nome vem da base de componentes do
+2. No app o kit liberado fica clicável. Quem separa toca em **Separar** e confirma
+   na janela. O app não escreve na planilha: ele pede a separação (`kits_separar`,
+   que cria uma linha em `kits_fila`) e marca o kit como separado na hora.
+3. No ciclo seguinte (até 1 minuto) o Apps Script lê a fila e grava `TRUE` na
+   coluna **ALMOX. FRENTE**, se a aba, o produto e o KIT ainda conferem. Se falhar,
+   a marca é desfeita e o histórico registra `falhou`.
+4. Estados: **separado** = `ALMOX. FRENTE` marcada (com ou sem KIT) · **liberado**
+   = só `KIT` marcado · **aguardando** = nenhuma das duas. Só o liberado pode ser
+   separado; o aguardando e o separado não abrem a ação.
+5. **Falta no kit:** digitando o código, o nome vem da base de componentes do
    Faltas. Ao registrar, a falta entra na lista de Faltas (e dispara a
-   notificação) e fica vinculada ao kit.
+   notificação) e fica vinculada ao kit. O kit mostra a quantidade faltante
+   (ex.: 2 ou 1,5). Kit já separado não aceita falta nova.
+6. Quando a falta é suprida no módulo Faltas, ela deixa de aparecer no kit.
+7. A aba **Histórico** lista as ações registradas (separações e faltas), da mais
+   recente para a mais antiga, com busca. Limite de 200 registros.
 
 ### Regras de leitura da planilha
 
-- O app envia só o **nome da aba**; semana e mês saem do nome (`<n>ª SEM <MÊS>`).
+- O seletor escolhe a aba da semana; semana e mês saem do nome (`<n>ª SEM <MÊS>`).
+  Abas com outro nome são ignoradas.
+- As colunas são achadas pelo **nome no cabeçalho** (linha 1): `CARGA`, `PRODUTO`,
+  `ALMOX. FRENTE` e `KIT`. A ordem não importa; se faltar uma, a aba dá erro.
 - Só entra linha com código no formato `CÓDIGO - NOME` (o código pode vir depois
   de `(SAT n)`). Ficam de fora as linhas `TOTAL DE MÁQUINAS...` e `LOGOTIPO`.
 - Exceção: as linhas de `BANCO MULTIFUNCIONAL` entram mesmo sem código, com
   carga `LOJA`.
-- Máquinas repetidas são linhas independentes, cada uma com o seu kit.
+- Máquinas repetidas são linhas independentes, cada uma com o seu kit. A
+  numeração (1/3, 2/3...) segue a ordem das linhas na planilha.
+- Se alguém inserir ou apagar linhas entre a leitura e o clique, o app avisa
+  "Esta linha mudou" e pede para atualizar.
 
 ### Permissões
 
 No `admin.html` cada usuário tem **Ver** e **Editar** no módulo Kits (a caixa
 Editar só aparece para módulos listados em `Auth.MODULOS_COM_EDICAO`). Sem
-Editar o usuário vê os kits, mas não separa. Lembrar de republicar o
-`js/usuarios.js` depois de mexer.
+Editar o usuário vê os kits, mas não separa nem registra falta. Usuário antigo
+sem o campo `edita` vê o Kits, mas não edita até o admin marcar Editar. Lembrar
+de republicar o `js/usuarios.js` depois de mexer.
 
-### Banco e função
+### Banco e funções
 
-- SQL: `supabase/patch_kits.sql` (ver tabela de SQL acima).
+- SQL: `supabase/patch_kits.sql` (`kits_historico`, `kits_faltas` e as RPCs
+  `kits_registrar_historico`, `kits_vincular_falta`, `kits_desvincular_falta`).
+  Precisa do módulo Faltas já criado.
 - SQL: `supabase/patch_kits_sync.sql` (espelho `kits_linhas`, `kits_sync`, fila
-  `kits_fila`, segredo em `kits_config`).
-- RPCs: `kits_registrar_historico`, `kits_vincular_falta`, `kits_desvincular_falta`,
-  `kits_separar` (pede a separação; vira linha em `kits_fila`).
+  `kits_fila`, segredo em `kits_config`). RPC do app: `kits_separar`. RPCs do
+  Apps Script, todas protegidas por segredo: `kits_sincronizar`,
+  `kits_fila_pendentes`, `kits_fila_concluir`, `kits_manter_abas`.
 - O app lê `kits_linhas` (abas vêm de `kits_sync`) e chama `kits_separar`. Não
   usa mais a Edge Function `kits-planilha`.
-- Apps Script `apps-script/kits-sync.gs` (dentro da planilha): a cada minuto
-  envia as abas editadas ao Supabase e grava `TRUE` em ALMOX. FRENTE para os
-  pedidos da fila. Passo a passo em `GUIA-KITS-APPS-SCRIPT.md`.
+- Apps Script `apps-script/kits-sync.gs` (dentro da planilha), gatilho de 1
+  minuto: envia as abas que mudaram, faz um reenvio completo a cada 15 minutos
+  (`COMPLETO_A_CADA_MIN`), reenvia abas sem mudança a cada 60 minutos
+  (`HEARTBEAT_MIN`) e processa até 50 pedidos da fila por ciclo (`LOTE_FILA`).
+  `kits_manter_abas` apaga o espelho de abas renomeadas ou excluídas.
 - A tela mostra "Planilha sincronizada às HH:MM" e avisa se o espelho está
   parado há mais de 10 minutos.
-- A pasta `supabase/functions/kits-planilha` e os segredos `GOOGLE_SA_*` não são
-  mais necessários.
+- A pasta `supabase/functions/kits-planilha` e os segredos `GOOGLE_SA_*` são
+  legado (conta de serviço do Google) e não são mais necessários.
+
+### Instalação (uma vez)
+
+1. No SQL Editor do Supabase rodar `patch_faltas.sql`, depois `patch_kits.sql` e
+   `patch_kits_sync.sql` (todos podem ser rodados mais de uma vez).
+2. Abrir a planilha, menu Extensões, Apps Script, e colar o conteúdo de
+   `apps-script/kits-sync.gs`.
+3. Em Propriedades do script criar `SUPABASE_URL`, `SUPABASE_KEY` (a chave
+   pública anon) e `SEGREDO_SYNC` (o valor gerado em `kits_config`, chave
+   `segredo_sync`; não colar em documentos nem no repositório).
+4. Rodar `testarConexao` e aceitar as permissões; depois rodar `instalar` para
+   criar o gatilho de 1 minuto. `sincronizarAgora` força um ciclo; `desinstalar`
+   remove o gatilho.
+5. No `admin.html` dar Ver e Editar do Kits aos usuários e republicar
+   `js/usuarios.js`.
+6. Conferir no app o aviso "Planilha sincronizada às HH:MM".
+
+### Limites
+
+- Atraso de até 1 minuto entre marcar na planilha e aparecer no app, e entre
+  tocar em Separar e a coluna ser marcada.
+- Mudar o nome das colunas ou o formato do nome da aba derruba a leitura. Linha
+  sem `CÓDIGO - NOME` some do app sem aviso.
+- O espelho é legível por quem tem a chave anon (política `using (true)`).
+- Se o gatilho do Apps Script parar, o app só avisa depois de 10 minutos.
+- O Apps Script tem limite de 6 minutos por execução e cotas do Google.
 
 ---
 
@@ -447,7 +518,7 @@ gere o novo `js/usuarios.js` e publique.
 ## Publicar uma atualização
 
 1. mudar `APP_VERSION` em `js/app.js`;
-2. mudar `CACHE_VERSION` em `sw.js` (mesmo número, ex. `pcp-lion-v2.0`);
+2. mudar `CACHE_VERSION` em `sw.js` (mesmo número, ex. `pcp-lion-v2.7`);
 3. se criou arquivo novo, adicionar em `ARQUIVOS` no `sw.js`;
 4. commit + push (GitHub Pages).
 

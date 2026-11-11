@@ -143,6 +143,16 @@ window.ModuloKits = (function () {
     return p.indexOf('BANCO') >= 0 && p.indexOf('MULTIFUNCIONAL') >= 0 && c === 'LOJA';
   }
 
+  /* destaque visual: nome com "anilheiro" ou variações próximas (anilheira, anilhero...) */
+  function htmlNomeMaquina(produto) {
+    var seguro = String(produto == null ? '' : produto)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return seguro.replace(/anil+h?e+i?r[a-z]*/gi, function (m) {
+      return '<span class="kit-anilheiro">' + m + '</span>';
+    });
+  }
+
   function decorar(linhas) {
     var lista = (linhas || []).filter(ehMaquina).map(function (l) {
       return {
@@ -600,7 +610,7 @@ window.ModuloKits = (function () {
       var dataKit = l.estado === 'aguardando' ? '' : ' data-kit="' + l.linha + '"';
       return '<div class="li kit-li ' + l.estado + '"' + dataKit + '>' +
         '<div class="li-main">' +
-          '<div class="li-nome">' + esc(l.produto || '(sem produto)') + seq + '</div>' +
+          '<div class="li-nome">' + htmlNomeMaquina(l.produto || '(sem produto)') + seq + '</div>' +
           '<div class="li-sub">Linha ' + l.linha + faltaTxt + '</div>' +
         '</div>' +
         dir +
@@ -659,7 +669,7 @@ window.ModuloKits = (function () {
         return '<div class="li kit-li separado" data-hist="' + esc(h.id) + '">' +
           '<div class="li-main">' +
             '<div class="li-code">' + esc(h.carga || 'Sem carga') + '</div>' +
-            '<div class="li-nome">' + esc(h.produto) + '</div>' +
+            '<div class="li-nome">' + htmlNomeMaquina(h.produto) + '</div>' +
             '<div class="li-sub li-sup-ok">' + acao + (h.usuario ? ' por ' + esc(h.usuario) : '') +
               ' em ' + esc(P.fmtDataHora(h.criado_em)) + '</div>' +
             '<div class="li-sub">' + esc(h.aba) + ' - linha ' + esc(h.linha) + '</div>' +
