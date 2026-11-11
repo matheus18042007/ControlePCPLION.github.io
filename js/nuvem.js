@@ -885,6 +885,27 @@ var Nuvem = (function () {
     });
   }
 
+  /* quantidade propria de um kit na falta (exige supabase/patch_kits_qtd_por_kit.sql) */
+  function kitsFaltaDefinirQtd(d) {
+    return req('/rpc/kits_definir_qtd_falta', {
+      method: 'POST',
+      body: {
+        p_aba: d.aba,
+        p_linha: d.linha,
+        p_falta_id: String(d.falta_id),
+        p_qtd: Number(d.qtd)
+      }
+    });
+  }
+
+  /* desliga so um kit da falta; os outros kits continuam ligados */
+  function kitsFaltaDesvincularKit(d) {
+    return req('/rpc/kits_desvincular_kit_falta', {
+      method: 'POST',
+      body: { p_aba: d.aba, p_linha: d.linha, p_falta_id: String(d.falta_id) }
+    });
+  }
+
   /* para o badge de falta nos kits da aba */
   function kitsFaltasDe(aba) {
     return puxarPaginado('/kits_faltas?select=*&aba=eq.' + encodeURIComponent(aba) + '&order=id').then(function (lista) {
@@ -909,7 +930,10 @@ var Nuvem = (function () {
         return lista.map(function (f) {
           var x = mapa[String(f.falta_id)];
           if (x) {
-            f.qtd = x.qtd;
+            /* qtd do vinculo = quantidade DESTE kit; vinculo antigo (nulo)
+               mostra o total da falta. qtd_total e a soma de todos os kits. */
+            f.qtd_total = Number(x.qtd) || 0;
+            f.qtd = (f.qtd != null) ? Number(f.qtd) : x.qtd;
             f.suprida_em = x.suprida_em || null;
           }
           return f;
@@ -937,6 +961,8 @@ var Nuvem = (function () {
     kitsHistorico: kitsHistorico,
     kitsFaltaVincular: kitsFaltaVincular,
     kitsFaltaDesvincular: kitsFaltaDesvincular,
+    kitsFaltaDefinirQtd: kitsFaltaDefinirQtd,
+    kitsFaltaDesvincularKit: kitsFaltaDesvincularKit,
     kitsFaltaAtualizarCodigo: kitsFaltaAtualizarCodigo,
     kitsFaltasDe: kitsFaltasDe,
     ativa: ativa,

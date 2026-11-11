@@ -843,11 +843,15 @@ window.ModuloKits = (function () {
         if (!f) { toast('Falta não encontrada no módulo de faltas', 'err'); return; }
         $(id + 'FCodigo').value = f.codigo;
         $(id + 'FNome').value = f.nome || '';
-        $(id + 'FQtd').value = String(f.qtd);
-        $(id + 'FDica').textContent = 'Esta falta é a mesma do módulo Faltas: a alteração vale para todos os kits ligados a ela.';
+        var propria = (vinc.qtd != null) ? Number(vinc.qtd) : f.qtd;
+        $(id + 'FQtd').value = String(propria);
+        $(id + 'FDica').textContent = 'A quantidade é só deste kit. O módulo Faltas mostra a soma de todos os kits.';
         $(id + 'FLista').innerHTML = '';
         estado.nomeAuto = false;
-        estado.editando = { falta_id: fid, codigo: f.codigo };
+        estado.editando = {
+          falta_id: fid, codigo: f.codigo, aba: estado.aba, linha: l.linha,
+          carga: l.carga, produto: l.produto, own: propria, total: f.qtd
+        };
         modoFormFalta(true);
         definirAlmFalta(f.almox);
         $(id + 'FaltaKit').textContent = (l.carga ? l.carga + ' - ' : '') + (l.produto || '');
@@ -859,19 +863,31 @@ window.ModuloKits = (function () {
     }
 
     /* acerta codigo/qtd da falta em todos os caches locais */
-    function atualizarFaltaLocal(fid, codigo, qtd) {
+    /* o codigo vale para todos os kits da falta; a quantidade so para o
+       kit (aba + linha) informado */
+    function ehDoKit(f, aba, linha) {
+      return f.linha === linha && (f.aba == null || f.aba === aba);
+    }
+
+    function atualizarFaltaLocal(fid, codigo, qtd, aba, linha) {
       function acerta(lista) {
         (lista || []).forEach(function (f) {
-          if (String(f.falta_id) === String(fid)) { f.codigo = codigo; f.qtd = qtd; }
+          if (String(f.falta_id) !== String(fid)) return;
+          f.codigo = codigo;
+          if (ehDoKit(f, aba, linha)) f.qtd = qtd;
         });
       }
       Object.keys(cacheAba).forEach(function (a) { acerta(cacheAba[a].faltas); });
       Object.keys(estado.faltas || {}).forEach(function (k) { acerta(estado.faltas[k]); });
     }
 
-    function removerFaltaLocal(fid) {
+    /* sem aba/linha: tira a falta de todos os kits; com aba/linha: so daquele kit */
+    function removerFaltaLocal(fid, aba, linha) {
       function sem(lista) {
-        return (lista || []).filter(function (f) { return String(f.falta_id) !== String(fid); });
+        return (lista || []).filter(function (f) {
+          if (String(f.falta_id) !== String(fid)) return true;
+          return aba != null && !ehDoKit(f, aba, linha);
+        });
       }
       Object.keys(cacheAba).forEach(function (a) {
         var c = cacheAba[a];
@@ -890,6 +906,25 @@ window.ModuloKits = (function () {
       $(id + 'FExcluir').disabled = false;
     }
 
+    /* a falta de um kit passou para outro componente: o vinculo troca de falta */
+    function trocarFaltaLocal(fidAntigo, aba, linha, fidNovo, codigo, qtd) {
+      function troca(lista) {
+        (lista || []).forEach(function (f) {
+          if (String(f.falta_id) === String(fidAntigo) && ehDoKit(f, aba, linha)) {
+            f.falta_id = String(fidNovo);
+            f.codigo = codigo;
+            f.qtd = qtd;
+          }
+        });
+      }
+      Object.keys(cacheAba).forEach(function (a) { troca(cacheAba[a].faltas); });
+      Object.keys(estado.faltas || {}).forEach(function (k) { troca(estado.faltas[k]); });
+    }
+
+    /* A falta do modulo Faltas e a SOMA de todos os kits (uma linha por
+       codigo + almoxarifado). A quantidade de cada kit mora no vinculo
+       (kits_faltas.qtd). Editar um kit mexe so na parte dele:
+       outros = total da falta - parte deste kit. */
     function salvarEdicaoFalta() {
       if (estado.ocupado || !estado.editando) return;
       var F = window.ModuloFaltas;
@@ -907,29 +942,102 @@ window.ModuloKits = (function () {
       $(id + 'FExcluir').disabled = true;
       btn.textContent = 'Salvando...';
 
-      F.editarExterno({ id: ed.falta_id, codigo: codigo, nome: nome, qtd: qtd, almox: estado.almFalta })
-        .then(function (r) {
-          if (r.codigo === ed.codigo) return { r: r, vinculo: 'ok' };
-          return nv().kitsFaltaAtualizarCodigo(ed.falta_id, r.codigo).then(function () {
-            return { r: r, vinculo: 'ok' };
-          }, function (e) {
-            return { r: r, vinculo: 'erro', erro: msgErro(e) };
+      var chave = { aba: ed.aba, linha: ed.linha, falta_id: ed.falta_id };
+
+      F.obterFalta(ed.falta_id).then(function (atual) {
+        if (!atual) throw new Error('Falta não encontrada no módulo de faltas');
+        var N = nv();
+        if (!N) throw new Error('Nuvem indisponível');
+
+        var total = Number(atual.qtd) || 0;
+        var propria = Math.min(Number(ed.own) || total, total);
+        var outros = total - propria;
+        var mesmoItem = codigo.toUpperCase() === String(atual.codigo).toUpperCase() &&
+          estado.almFalta === atual.almox;
+
+        /* grava a quantidade deste kit no vinculo; devolve texto de erro ou null */
+        function gravarQtd(fid) {
+          return N.kitsFaltaDefinirQtd({ aba: ed.aba, linha: ed.linha, falta_id: fid, qtd: qtd })
+            .then(function () { return null; }, function (e) { return msgErro(e); });
+        }
+
+        /* so este kit tem a falta: edita a falta inteira */
+        if (outros <= 0) {
+          return F.editarExterno({
+            id: ed.falta_id, codigo: codigo, nome: nome, qtd: qtd, almox: estado.almFalta
+          }).then(function (r) {
+            var p = (r.codigo === ed.codigo)
+              ? Promise.resolve()
+              : N.kitsFaltaAtualizarCodigo(ed.falta_id, r.codigo);
+            return p.then(function () { return gravarQtd(ed.falta_id); }, function (e) { return msgErro(e); })
+              .then(function (erro) {
+                return { codigo: r.codigo, falta_id: ed.falta_id, nuvem: r.nuvem, erroNuvem: r.erroNuvem, erro: erro };
+              });
           });
-        }).then(function (res) {
-          atualizarFaltaLocal(ed.falta_id, res.r.codigo, res.r.qtd);
-          if (res.vinculo === 'erro') {
-            toast('Falta salva, mas o código no kit não foi atualizado: ' + res.erro, 'err');
-          } else if (res.r.nuvem === false) {
-            toast('Falta salva neste aparelho; falhou na nuvem: ' + (res.r.erroNuvem || 'sem conexão'), 'err');
-          } else {
-            toast('Falta atualizada', 'ok');
-          }
-          fecharFormFalta();
-          pintarDetalhe();
-          renderLista();
-        })['catch'](function (e) {
-          toast((e && e.message) || 'Falha ao editar a falta', 'err');
-        }).then(function () { fimEdicao(btn, 'Salvar alterações'); });
+        }
+
+        /* falta dividida com outros kits, mesmo componente: so muda a parte deste kit */
+        if (mesmoItem) {
+          return F.editarExterno({
+            id: ed.falta_id, codigo: atual.codigo, nome: nome || atual.nome,
+            qtd: outros + qtd, almox: atual.almox
+          }).then(function (r) {
+            return gravarQtd(ed.falta_id).then(function (erro) {
+              return { codigo: r.codigo, falta_id: ed.falta_id, nuvem: r.nuvem, erroNuvem: r.erroNuvem, erro: erro };
+            });
+          });
+        }
+
+        /* falta dividida e o kit trocou de componente: sai da falta antiga
+           (so a parte dele), entra na do novo componente e religa */
+        var novo;
+        return F.registrarExterno({
+          codigo: codigo, nome: nome, qtd: qtd, almox: estado.almFalta, origem: 'kits'
+        }).then(function (r2) {
+          novo = r2;
+          return N.kitsFaltaVincular({
+            aba: ed.aba, linha: ed.linha, carga: ed.carga, produto: ed.produto,
+            falta_id: String(r2.id), codigo: r2.codigo, criado_por: operador()
+          }).then(null, function (e) {
+            /* nao conseguiu ligar: desfaz a soma na falta nova */
+            var desfazer = (novo.qtd - qtd >= 1)
+              ? F.editarExterno({ id: novo.id, codigo: novo.codigo, nome: novo.nome, qtd: novo.qtd - qtd, almox: novo.almox })
+              : F.excluirExterno({ id: novo.id });
+            return desfazer.then(null, function () {}).then(function () { throw e; });
+          });
+        }).then(function () {
+          return gravarQtd(String(novo.id));
+        }).then(function (erro) {
+          return N.kitsFaltaDesvincularKit(chave).then(function () { return erro; }, function (e) {
+            return erro || msgErro(e);
+          });
+        }).then(function (erro) {
+          return F.editarExterno({
+            id: ed.falta_id, codigo: atual.codigo, nome: atual.nome, qtd: outros, almox: atual.almox
+          }).then(function (r) {
+            return {
+              codigo: novo.codigo, falta_id: String(novo.id), trocou: true,
+              nuvem: novo.nuvem !== false && r.nuvem !== false,
+              erroNuvem: novo.erroNuvem || r.erroNuvem, erro: erro
+            };
+          });
+        });
+      }).then(function (res) {
+        if (res.trocou) trocarFaltaLocal(ed.falta_id, ed.aba, ed.linha, res.falta_id, res.codigo, qtd);
+        else atualizarFaltaLocal(res.falta_id, res.codigo, qtd, ed.aba, ed.linha);
+        if (res.erro) {
+          toast('Falta salva, mas a quantidade do kit não foi atualizada: ' + res.erro, 'err');
+        } else if (res.nuvem === false) {
+          toast('Falta salva neste aparelho; falhou na nuvem: ' + (res.erroNuvem || 'sem conexão'), 'err');
+        } else {
+          toast('Falta atualizada', 'ok');
+        }
+        fecharFormFalta();
+        pintarDetalhe();
+        renderLista();
+      })['catch'](function (e) {
+        toast((e && e.message) || 'Falha ao editar a falta', 'err');
+      }).then(function () { fimEdicao(btn, 'Salvar alterações'); });
     }
 
     function excluirFaltaEditando() {
@@ -937,17 +1045,47 @@ window.ModuloKits = (function () {
       var F = window.ModuloFaltas;
       if (!F) { toast('Módulo de faltas indisponível', 'err'); return; }
       var ed = estado.editando;
-      if (!window.confirm('Excluir a falta de ' + ed.codigo + '? Ela sai do módulo Faltas e de todos os kits ligados a ela.')) return;
+      var dividida = (Number(ed.total) || 0) - (Number(ed.own) || 0) > 0;
+      var aviso = dividida
+        ? 'Excluir a falta de ' + ed.codigo + ' deste kit? Ela continua nos outros kits; só a parte deste kit sai do módulo Faltas.'
+        : 'Excluir a falta de ' + ed.codigo + '? Ela sai do módulo Faltas e do kit.';
+      if (!window.confirm(aviso)) return;
 
       var btn = $(id + 'FSalvar');
       estado.ocupado = true;
       btn.disabled = true;
       $(id + 'FExcluir').disabled = true;
 
-      F.excluirExterno({ id: ed.falta_id }).then(function (r) {
-        removerFaltaLocal(ed.falta_id);
-        if (r.nuvem === false) {
-          toast('Falta excluída neste aparelho; falhou na nuvem: ' + (r.erroNuvem || 'sem conexão'), 'err');
+      F.obterFalta(ed.falta_id).then(function (atual) {
+        /* ja nao existe: so limpa o kit */
+        if (!atual) return { r: { nuvem: true }, tudo: true };
+
+        var total = Number(atual.qtd) || 0;
+        var propria = Math.min(Number(ed.own) || total, total);
+        var outros = total - propria;
+
+        /* so este kit tinha a falta: apaga a falta inteira */
+        if (outros <= 0) {
+          return F.excluirExterno({ id: ed.falta_id }).then(function (r) { return { r: r, tudo: true }; });
+        }
+
+        /* dividida com outros kits: tira so a parte deste kit */
+        var N = nv();
+        if (!N) throw new Error('Nuvem indisponível');
+        return F.editarExterno({
+          id: ed.falta_id, codigo: atual.codigo, nome: atual.nome, qtd: outros, almox: atual.almox
+        }).then(function (r) {
+          return N.kitsFaltaDesvincularKit({ aba: ed.aba, linha: ed.linha, falta_id: ed.falta_id }).then(function () {
+            return { r: r, tudo: false };
+          }, function (e) {
+            throw new Error('Quantidade tirada da falta, mas o kit continua ligado: ' + msgErro(e));
+          });
+        });
+      }).then(function (res) {
+        if (res.tudo) removerFaltaLocal(ed.falta_id);
+        else removerFaltaLocal(ed.falta_id, ed.aba, ed.linha);
+        if (res.r.nuvem === false) {
+          toast('Falta excluída neste aparelho; falhou na nuvem: ' + (res.r.erroNuvem || 'sem conexão'), 'err');
         } else {
           toast('Falta excluída', 'ok');
         }
@@ -984,24 +1122,47 @@ window.ModuloKits = (function () {
         codigo: codigo, nome: nome, qtd: qtd, almox: estado.almFalta, origem: 'kits'
       }).then(function (r) {
         var fid = String(r.id);
-        var ja = faltasDe(l).some(function (f) { return String(f.falta_id) === fid; });
-        if (ja) return { r: r, vinculo: 'ja' };
+        /* r.qtd e o total da falta (soma de todos os kits); cada kit guarda
+           a sua parte no vinculo */
+        var vinc = faltasDe(l).filter(function (f) { return String(f.falta_id) === fid; })[0];
+
+        function gravarQtd(propria) {
+          return Promise.resolve().then(function () {
+            return nv().kitsFaltaDefinirQtd({ aba: aba, linha: l.linha, falta_id: fid, qtd: propria });
+          }).then(function () { return null; }, function (e) { return msgErro(e); });
+        }
+
+        /* este kit ja tinha essa falta: soma so na parte dele */
+        if (vinc) {
+          var antes = (Number(r.qtd) || 0) - qtd;
+          var soma = (vinc.qtd != null ? Number(vinc.qtd) : antes) + qtd;
+          return gravarQtd(soma).then(function (erro) {
+            if (erro) return { r: r, vinculo: 'erroqtd', erro: erro };
+            atualizarFaltaLocal(fid, r.codigo, soma, aba, l.linha);
+            return { r: r, vinculo: 'soma' };
+          });
+        }
+
         return Promise.resolve().then(function () {
           return nv().kitsFaltaVincular({
             aba: aba, linha: l.linha, carga: l.carga, produto: l.produto,
             falta_id: fid, codigo: r.codigo, criado_por: operador()
           });
         }).then(function () {
-          adicionarFaltaLocal(aba, l, fid, r.codigo, (r.qtd != null ? r.qtd : qtd));
-          return { r: r, vinculo: 'ok' };
+          return gravarQtd(qtd).then(function (erro) {
+            adicionarFaltaLocal(aba, l, fid, r.codigo, erro ? (r.qtd != null ? r.qtd : qtd) : qtd);
+            return erro ? { r: r, vinculo: 'erroqtd', erro: erro } : { r: r, vinculo: 'ok' };
+          });
         }, function (e) {
           return { r: r, vinculo: 'erro', erro: msgErro(e) };
         });
       }).then(function (res) {
         if (res.vinculo === 'erro') {
           toast('Falta registrada, mas sem vínculo com o kit: ' + res.erro, 'err');
+        } else if (res.vinculo === 'erroqtd') {
+          toast('Falta registrada, mas a quantidade do kit não foi salva (rode o SQL patch_kits_qtd_por_kit): ' + res.erro, 'err');
         } else {
-          toast(res.vinculo === 'ja' ? 'Falta já estava vinculada a este kit' : 'Falta registrada e vinculada ao kit', 'ok');
+          toast(res.vinculo === 'soma' ? 'Quantidade somada à falta deste kit' : 'Falta registrada e vinculada ao kit', 'ok');
         }
         fecharFormFalta();
         pintarDetalhe();
