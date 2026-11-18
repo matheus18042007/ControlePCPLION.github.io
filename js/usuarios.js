@@ -7,7 +7,7 @@
    este arquivo nao serve para nada.
 
    Usuarios: Matheus movio, Alan Marques, joao victor, Kauã, Gabriel B., Gabriel Kirschner, cesar, Norrany, Almoxarifado Frente
-   Gerado em: 11/11/2026, 14:11:22
+   Gerado em: 18/11/2026, 16:45:45
    ========================================================= */
 var COFRE = {
   "v": 1,
@@ -139,14 +139,12 @@ var COFRE = {
     {
       "login": "Norrany",
       "nome": "Norrany",
-      "salt": "cKMU9W4b0WWISp992TDJvg==",
+      "salt": "Utcv1qYkf1X3q30Y5WSo2Q==",
       "env": {
-        "iv": "xG7pvtLsn4KKfDKI",
-        "ct": "eUXNOgWhdmXbavAFblhCY6bmhY6bQrODyskfdEyjeAgNIsF/YWPO2+j9fTNNYY4V"
+        "iv": "tyNm9RkLc4XBh3wL",
+        "ct": "v9WaaG3ugiUdNTVNhkASJP3cI6xyNGjIB6mYwSk1hspQypJ2GWOrPh17V88ZRR1M"
       },
       "mods": [
-        "quadro",
-        "maquinas",
         "carenagem",
         "eficiencia",
         "faltas",
