@@ -21,14 +21,16 @@
    Mesma forma pública do ModuloFaltas: obter(cfg) devolve a
    instância (preparar, aoMostrarView, fecharSheets) e o objeto
    também expõe aoMostrarView(nome) para todas as instâncias.
-   Cota da planilha: 60 leituras/min/usuário, então NÃO há polling
-   automático; a leitura de cada aba fica em cache por 20 s.
+   A leitura de cada aba fica em cache por 20 s. Com a lista de kits
+   na tela, o app relê o espelho sozinho a cada AUTO_MS (só o
+   Supabase, não a planilha, então não gasta cota do Google).
    ========================================================= */
 window.ModuloKits = (function () {
   'use strict';
 
   var CACHE_MS = 20000;          /* leitura de uma aba */
   var CACHE_ABAS_MS = 300000;    /* lista de abas (muda raramente) */
+  var AUTO_MS = 30000;           /* releitura automática com a lista na tela */
   var SYNC_ATRASADA_MS = 600000; /* espelho sem sincronizar ha mais de 10 min = aviso */
 
   var MESES = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
@@ -393,6 +395,39 @@ window.ModuloKits = (function () {
         try { P.atualizarStatusNuvem(); } catch (e2) {}
       });
       return estado.promessa;
+    }
+
+    /* releitura silenciosa: sem "carregando", sem piscar; só redesenha se
+       algo mudou. Não roda com janela aberta (detalhe/falta/separar). */
+    function algoAberto() {
+      return ['SheetKit', 'SheetFalta', 'SheetSep'].some(function (s) {
+        var el = $(id + s);
+        return el && el.classList.contains('open');
+      });
+    }
+
+    function assinatura() {
+      return String(estado.sync) + JSON.stringify(estado.linhas) + JSON.stringify(estado.faltas);
+    }
+
+    function autoAtualizar() {
+      var v = $('view-' + id + '-lista');
+      if (!montado || document.hidden || estado.carregando || estado.ocupado || !estado.aba ||
+          !temAcesso() || !v || !v.classList.contains('active') || algoAberto()) return;
+      var aba = estado.aba;
+      var antes = assinatura();
+      lerAba(aba, true).then(function () {
+        if (estado.aba !== aba) {
+          /* trocou de aba durante a leitura: devolve os dados da aba atual */
+          var c = cacheAba[estado.aba];
+          if (c) aplicarCache(c); else { estado.linhas = null; estado.faltas = {}; }
+          return;
+        }
+        if (assinatura() !== antes && !algoAberto()) {
+          renderLista();
+          try { P.atualizarStatusNuvem(); } catch (e) {}
+        }
+      }, function () { /* falha de rede em segundo plano: tenta de novo no próximo ciclo */ });
     }
 
     /* ---------- histórico ---------- */
@@ -1253,6 +1288,10 @@ window.ModuloKits = (function () {
       });
 
       $(id + 'Atualizar').addEventListener('click', function () { carregar(true); });
+
+      /* atualização automática: a cada AUTO_MS e ao voltar para a aba do navegador */
+      setInterval(autoAtualizar, AUTO_MS);
+      document.addEventListener('visibilitychange', autoAtualizar);
 
       $(id + 'Aba').addEventListener('change', function (ev) {
         estado.aba = ev.target.value;
