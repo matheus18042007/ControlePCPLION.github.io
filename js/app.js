@@ -5,7 +5,7 @@
 (function () {
 'use strict';
 
-var APP_VERSION = '2.9.4';
+var APP_VERSION = '2.9.7';
 
 /* ---------------------------------------------------------
    Atalhos DOM

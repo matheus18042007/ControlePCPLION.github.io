@@ -840,7 +840,7 @@ var Nuvem = (function () {
         p_aparelho: ap
       }
     }).then(null, function (e) {
-      if (/mudou|nao esta liberado|nao encontrada/i.test(String(e && e.message))) e.status = 409;
+      if (/mudou|nao esta liberado|nao encontrada|em andamento/i.test(String(e && e.message))) e.status = 409;
       throw e;
     });
   }
@@ -851,6 +851,70 @@ var Nuvem = (function () {
     return req('/kits_historico?select=*' +
       (o.aba ? '&aba=eq.' + encodeURIComponent(o.aba) : '') +
       '&order=criado_em.desc,id.desc&limit=' + (o.limite || 200));
+  }
+
+  /* ---------- sobras de kits ---------- */
+  function kitsCatalogo() {
+    return req('/kits_catalogo?select=*&order=kit_cod.asc,produto_cod.asc&limit=1000');
+  }
+
+  function kitsSobras() {
+    return req('/kits_sobras?select=*&order=atualizado_em.desc&limit=1000');
+  }
+
+  function kitsSobrasHist(d) {
+    var o = d || {};
+    return req('/kits_sobras_hist?select=*' +
+      (o.kit ? '&kit_cod=eq.' + encodeURIComponent(o.kit) : '') +
+      '&order=criado_em.desc,id.desc&limit=' + (o.limite || 200));
+  }
+
+  /* acao: 'entrada' soma, 'baixa' subtrai, 'ajuste' define o saldo */
+  function kitsSobraMover(d) {
+    var ap = null;
+    try { ap = aparelho(); } catch (e) {}
+    return req('/rpc/kits_sobra_mover', {
+      method: 'POST',
+      body: {
+        p_kit: d.kit,
+        p_acao: d.acao,
+        p_qtd: d.qtd,
+        p_usuario: d.usuario || null,
+        p_aparelho: ap,
+        p_obs: d.obs || null
+      }
+    });
+  }
+
+  /* linhas de todas as semanas em que a coluna KIT ainda nao esta marcada e
+     cujo produto usa este kit */
+  function kitsSobraDestinos(kit) {
+    return req('/rpc/kits_sobra_destinos', {
+      method: 'POST',
+      body: { p_kit: kit }
+    });
+  }
+
+  /* da baixa de 1 unidade na sobra e marca KIT na linha (o Apps Script grava na
+     planilha). Erros de "planilha mudou / carga ja liberada" viram status 409 */
+  function kitsSobraRemanejar(d) {
+    var ap = null;
+    try { ap = aparelho(); } catch (e) {}
+    return req('/rpc/kits_sobra_remanejar', {
+      method: 'POST',
+      body: {
+        p_kit: d.kit,
+        p_aba: d.aba,
+        p_linha: d.linha,
+        p_carga: d.carga == null ? null : d.carga,
+        p_produto: d.produto,
+        p_usuario: d.usuario || null,
+        p_aparelho: ap
+      }
+    }).then(null, function (e) {
+      if (/mudou|ja foi liberada|nao encontrada|em andamento/i.test(String(e && e.message))) e.status = 409;
+      throw e;
+    });
   }
 
   function kitsFaltaVincular(d) {
@@ -959,6 +1023,12 @@ var Nuvem = (function () {
     kitsLer: kitsLer,
     kitsSeparar: kitsSeparar,
     kitsHistorico: kitsHistorico,
+    kitsCatalogo: kitsCatalogo,
+    kitsSobras: kitsSobras,
+    kitsSobrasHist: kitsSobrasHist,
+    kitsSobraMover: kitsSobraMover,
+    kitsSobraDestinos: kitsSobraDestinos,
+    kitsSobraRemanejar: kitsSobraRemanejar,
     kitsFaltaVincular: kitsFaltaVincular,
     kitsFaltaDesvincular: kitsFaltaDesvincular,
     kitsFaltaDefinirQtd: kitsFaltaDefinirQtd,

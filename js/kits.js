@@ -297,7 +297,12 @@ window.ModuloKits = (function () {
       filtro: '', busca: '',
       carregando: false, promessa: null, erro: '',
       alvo: null, ocupado: false, almFalta: 'frente', nomeAuto: false, editando: null,
-      hist: null, histT: 0, histBusca: '', histCarregando: false, histErro: ''
+      hist: null, histT: 0, histBusca: '', histCarregando: false, histErro: '',
+      /* sobras: catalogo (kit -> produto/quadro/anilheiro) e saldo por kit */
+      catalogo: null, catT: 0, sobras: null, sobT: 0, sobBusca: '',
+      sobCarregando: false, sobErro: '', sobOcupado: false, sobAlvo: '',
+      /* cargas que ainda podem receber o kit aberto na janela da sobra */
+      sobDest: null
     };
     var cacheAba = {};
     var tDigita = null, tBusca = null;
@@ -400,7 +405,7 @@ window.ModuloKits = (function () {
     /* releitura silenciosa: sem "carregando", sem piscar; só redesenha se
        algo mudou. Não roda com janela aberta (detalhe/falta/separar). */
     function algoAberto() {
-      return ['SheetKit', 'SheetFalta', 'SheetSep'].some(function (s) {
+      return ['SheetKit', 'SheetFalta', 'SheetSep', 'SheetSobra', 'SheetSobNova'].some(function (s) {
         var el = $(id + s);
         return el && el.classList.contains('open');
       });
@@ -489,6 +494,20 @@ window.ModuloKits = (function () {
         '    <input id="' + id + 'HistBusca" type="search" inputmode="search" placeholder="Buscar carga, produto ou usuário..." autocomplete="off">',
         '  </div>',
         '  <div id="' + id + 'HistLista" class="list"></div>',
+        '</section>',
+
+        /* ---------- ABA 3: SOBRAS ---------- */
+        '<section id="view-' + id + '-sobras" class="view" data-modulo="' + id + '">',
+        '  <div class="kits-topo">',
+        '    <span class="muted small kits-status">Kits que sobraram, por código do kit</span>',
+        '    <button id="' + id + 'SobAtualizar" class="pill" type="button">&#8635; Atualizar</button>',
+        '  </div>',
+        '  <button id="' + id + 'SobAbrir" class="btn primary block" type="button">Registrar sobra</button>',
+        '  <div class="searchbar">',
+        '    <input id="' + id + 'SobBusca" type="search" inputmode="search" placeholder="Buscar kit, código ou produto..." autocomplete="off">',
+        '  </div>',
+        '  <div id="' + id + 'SobStatus" class="muted small kits-status"></div>',
+        '  <div id="' + id + 'SobItens" class="list"></div>',
         '</section>'
       ].join('\n');
       while (wrap.firstChild) main.appendChild(wrap.firstChild);
@@ -500,7 +519,8 @@ window.ModuloKits = (function () {
       nav.setAttribute('data-modulo', id);
       nav.innerHTML = [
         '<button class="tab active" data-view="' + id + '-lista" type="button"><span>&#9745;</span>Kits</button>',
-        '<button class="tab" data-view="' + id + '-historico" type="button"><span>&#8634;</span>Histórico</button>'
+        '<button class="tab" data-view="' + id + '-historico" type="button"><span>&#8634;</span>Histórico</button>',
+        '<button class="tab" data-view="' + id + '-sobras" type="button"><span>&#8853;</span>Sobras</button>'
       ].join('');
       document.body.appendChild(nav);
 
@@ -558,6 +578,46 @@ window.ModuloKits = (function () {
         '      <button id="' + id + 'SepOk" class="btn primary" type="button">Separar</button>',
         '    </div>',
         '  </div>',
+        '</div>',
+
+        '<div id="' + id + 'SheetSobNova" class="sheet-wrap janela-pc" data-modulo="' + id + '">',
+        '  <div class="sheet">',
+        '    <div class="sheet-handle"></div>',
+        '    <button class="janela-x" type="button" aria-label="Fechar">&times;</button>',
+        '    <h3>Registrar sobra</h3>',
+        '    <label class="lbl">Código do kit</label>',
+        '    <input id="' + id + 'SobKit" type="text" inputmode="numeric" autocomplete="off" list="' + id + 'SobLista" placeholder="Digite o código do kit">',
+        '    <datalist id="' + id + 'SobLista"></datalist>',
+        '    <p id="' + id + 'SobInfo" class="muted small"></p>',
+        '    <label class="lbl">Quantidade que sobrou</label>',
+        '    <input id="' + id + 'SobQtd" type="number" inputmode="numeric" min="1" step="1" value="1">',
+        '    <div class="sheet-actions">',
+        '      <button id="' + id + 'SobCancelar" class="btn ghost" type="button">Cancelar</button>',
+        '      <button id="' + id + 'SobRegistrar" class="btn primary" type="button">Registrar sobra</button>',
+        '    </div>',
+        '  </div>',
+        '</div>',
+
+        '<div id="' + id + 'SheetSobra" class="sheet-wrap janela-pc" data-modulo="' + id + '">',
+        '  <div class="sheet">',
+        '    <div class="sheet-handle"></div>',
+        '    <button class="janela-x" type="button" aria-label="Fechar">&times;</button>',
+        '    <h3 id="' + id + 'SobTitulo">Kit</h3>',
+        '    <div id="' + id + 'SobCorpo"></div>',
+        '    <div class="section-title">Remanejar para uma carga</div>',
+        '    <div id="' + id + 'SobDest" class="muted small"></div>',
+        '    <label class="lbl">Quantidade</label>',
+        '    <input id="' + id + 'SobMQtd" type="number" inputmode="numeric" min="0" step="1" value="1">',
+        '    <label class="lbl">Observação (opcional)</label>',
+        '    <input id="' + id + 'SobMObs" type="text" autocomplete="off" maxlength="200">',
+        '    <div class="sheet-actions">',
+        '      <button id="' + id + 'SobSomar" class="btn ghost" type="button">Somar</button>',
+        '      <button id="' + id + 'SobBaixa" class="btn ghost" type="button">Dar baixa</button>',
+        '      <button id="' + id + 'SobDefinir" class="btn primary" type="button">Definir saldo</button>',
+        '    </div>',
+        '    <div class="section-title">Movimentações</div>',
+        '    <div id="' + id + 'SobHist" class="muted small"></div>',
+        '  </div>',
         '</div>'
       ].join('\n');
       while (sheets.firstChild) document.body.appendChild(sheets.firstChild);
@@ -566,9 +626,11 @@ window.ModuloKits = (function () {
     }
 
     function fecharSheets() {
-      var a = $(id + 'SheetKit'), b = $(id + 'SheetSep');
+      var a = $(id + 'SheetKit'), b = $(id + 'SheetSep'), c = $(id + 'SheetSobra'), n = $(id + 'SheetSobNova');
       if (a) a.classList.remove('open');
       if (b) b.classList.remove('open');
+      if (c) c.classList.remove('open');
+      if (n) n.classList.remove('open');
       fecharFormFalta();
     }
 
@@ -709,7 +771,9 @@ window.ModuloKits = (function () {
       var aviso = estado.histErro
         ? '<div class="muted small kits-status-erro">' + esc(estado.histErro) + ' (mostrando a última leitura)</div>' : '';
       el.innerHTML = aviso + lista.map(function (h) {
-        var acao = h.acao === 'separar' ? 'Separado' : esc(h.acao || '');
+        var acao = h.acao === 'separar' ? 'Separado'
+                 : h.acao === 'remanejar' ? 'Kit liberado (sobra)'
+                 : esc(h.acao || '');
         return '<div class="li kit-li separado" data-hist="' + esc(h.id) + '">' +
           '<div class="li-main">' +
             '<div class="li-code">' + esc(h.carga || 'Sem carga') + '</div>' +
@@ -720,6 +784,344 @@ window.ModuloKits = (function () {
           '</div>' +
         '</div>';
       }).join('');
+    }
+
+    /* =========================================================
+       SOBRAS - kits que sobraram, por código do kit
+       ========================================================= */
+    var catMapa = {};   /* kit_cod -> { cod, nome, produtos[], quadros[], anilheiros[] } */
+    var sobRepetir = false, tBuscaSob = null, promessaSob = null;
+
+    function limpaNome(s) { return String(s == null ? '' : s).replace(/^\s*-\s*/, '').trim(); }
+    function juntar(arr, v) { v = limpaNome(v); if (v && arr.indexOf(v) === -1) arr.push(v); }
+
+    function montarCatMapa() {
+      catMapa = {};
+      (estado.catalogo || []).forEach(function (r) {
+        var k = String(r.kit_cod);
+        var o = catMapa[k] || (catMapa[k] = { cod: k, nome: limpaNome(r.kit_nome), produtos: [], quadros: [], anilheiros: [] });
+        juntar(o.produtos, r.produto_nome || r.produto_cod);
+        juntar(o.quadros, r.quadro_pint_nome || r.quadro_nome);
+        juntar(o.anilheiros, r.anilheiro_nome);
+      });
+    }
+
+    function descricaoKit(o) {
+      var h = '<b>' + esc(o.nome || ('Kit ' + o.cod)) + '</b>';
+      if (o.produtos.length) h += '<br>Produto: ' + esc(o.produtos.join(', '));
+      if (o.quadros.length) h += '<br>Quadro: ' + esc(o.quadros.join(', '));
+      if (o.anilheiros.length) h += '<br>Anilheiro: ' + esc(o.anilheiros.join(', '));
+      return h;
+    }
+
+    function saldoSobra(cod) {
+      var ls = estado.sobras || [];
+      for (var i = 0; i < ls.length; i++) if (String(ls[i].kit_cod) === String(cod)) return Number(ls[i].qtd) || 0;
+      return 0;
+    }
+
+    function preencherListaCodigos() {
+      var dl = $(id + 'SobLista');
+      if (!dl || !estado.catalogo || dl.getAttribute('data-t') === String(estado.catT)) return;
+      dl.setAttribute('data-t', String(estado.catT));
+      dl.innerHTML = Object.keys(catMapa).sort(function (a, b) { return Number(a) - Number(b); }).map(function (k) {
+        return '<option value="' + esc(k) + '">' + esc(catMapa[k].nome) + '</option>';
+      }).join('');
+    }
+
+    function atualizarInfoSobra() {
+      var info = $(id + 'SobInfo');
+      if (!info) return;
+      var cod = ($(id + 'SobKit').value || '').trim();
+      if (!cod) info.textContent = '';
+      else if (!estado.catalogo) info.textContent = 'Carregando catálogo de kits...';
+      else if (catMapa[cod]) info.innerHTML = descricaoKit(catMapa[cod]);
+      else info.textContent = 'Código de kit não encontrado no catálogo.';
+    }
+
+    function carregarSobras(forcar, recatalogar) {
+      if (!temAcesso()) { renderSobras(); return Promise.resolve(); }
+      if (estado.sobCarregando) {
+        /* leitura forçada durante outra em andamento (ex.: logo após gravar):
+           a em andamento pode ter lido o saldo antigo, então repete ao final */
+        if (forcar) sobRepetir = true;
+        /* quem chamou espera a leitura em andamento (e a repetição, se houver) */
+        return promessaSob || Promise.resolve();
+      }
+      if (!forcar && estado.sobras && cacheValido(estado.sobT, Date.now(), CACHE_MS)) {
+        renderSobras();
+        return Promise.resolve();
+      }
+      estado.sobCarregando = true;
+      estado.sobErro = '';
+      renderSobras();
+      var precisaCat = !!recatalogar || !estado.catalogo || !cacheValido(estado.catT, Date.now(), CACHE_ABAS_MS);
+      promessaSob = Promise.resolve().then(function () {
+        return Promise.all([precisaCat ? nv().kitsCatalogo() : null, nv().kitsSobras()]);
+      }).then(function (r) {
+        if (r[0]) { estado.catalogo = r[0]; estado.catT = Date.now(); montarCatMapa(); }
+        estado.sobras = r[1] || [];
+        estado.sobT = Date.now();
+      })['catch'](function (e) {
+        estado.sobErro = msgErro(e);
+      }).then(function () {
+        estado.sobCarregando = false;
+        renderSobras();
+        atualizarInfoSobra();
+        if (sobRepetir) { sobRepetir = false; return carregarSobras(true, false); }
+      });
+      return promessaSob;
+    }
+
+    function renderSobras() {
+      var el = $(id + 'SobItens');
+      if (!el) return;
+      var st = $(id + 'SobStatus');
+      preencherListaCodigos();
+      if (!temAcesso()) { el.innerHTML = vazio('Sem acesso ao módulo Kits.'); if (st) st.textContent = ''; return; }
+      if (estado.sobCarregando && !estado.sobras) { el.innerHTML = vazio('Carregando sobras...'); return; }
+      if (!estado.sobras) { el.innerHTML = vazio(estado.sobErro || 'Toque em Atualizar para ler as sobras.'); return; }
+
+      var q = norm(estado.sobBusca);
+      var todos = estado.sobras.filter(function (s) { return Number(s.qtd) > 0; });
+      var lista = todos.filter(function (s) {
+        if (!q) return true;
+        var o = catMapa[String(s.kit_cod)];
+        return norm([s.kit_cod, s.kit_nome, o ? o.produtos.join(' ') : ''].join(' ')).indexOf(q) !== -1;
+      });
+      var total = todos.reduce(function (n, s) { return n + (Number(s.qtd) || 0); }, 0);
+      if (st) {
+        st.textContent = todos.length + ' kit(s) com sobra, ' + total + ' unidade(s) no total' +
+          (estado.sobErro ? ' - ' + estado.sobErro + ' (última leitura)' : '');
+      }
+      if (!lista.length) {
+        el.innerHTML = vazio(todos.length ? 'Nada encontrado na busca.' : 'Nenhuma sobra registrada.');
+        return;
+      }
+      el.innerHTML = lista.map(function (s) {
+        var o = catMapa[String(s.kit_cod)];
+        return '<div class="li kit-li" data-sobra="' + esc(s.kit_cod) + '">' +
+          '<div class="li-main">' +
+            '<div class="li-code">Kit ' + esc(s.kit_cod) + ' <span class="badge">' + esc(s.qtd) + ' un</span></div>' +
+            '<div class="li-nome">' + esc(limpaNome(s.kit_nome) || (o && o.nome) || '') + '</div>' +
+            (o && o.produtos.length ? '<div class="li-sub">' + esc(o.produtos.join(', ')) + '</div>' : '') +
+            '<div class="li-sub">Atualizado em ' + esc(P.fmtDataHora(s.atualizado_em)) +
+              (s.atualizado_por ? ' por ' + esc(s.atualizado_por) : '') + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function setBotoesSobra(ocupado) {
+      ['SobRegistrar', 'SobSomar', 'SobBaixa', 'SobDefinir'].forEach(function (b) {
+        var el = $(id + b);
+        if (el) el.disabled = !!ocupado;
+      });
+      var dst = $(id + 'SobDest');
+      if (dst) {
+        Array.prototype.forEach.call(dst.querySelectorAll('button[data-rem]'), function (b) {
+          b.disabled = !!ocupado;
+        });
+      }
+    }
+
+    /* uma única porta de escrita: entrada (soma), baixa (subtrai), ajuste (define) */
+    function executarSobra(cod, acao, qtd, obs) {
+      if (!podeEditar()) { toast('Seu usuário não pode editar este módulo', 'err'); return Promise.resolve(false); }
+      if (estado.sobOcupado) return Promise.resolve(false);
+      estado.sobOcupado = true;
+      setBotoesSobra(true);
+      return Promise.resolve().then(function () {
+        return nv().kitsSobraMover({ kit: cod, acao: acao, qtd: qtd, usuario: operador(), obs: obs });
+      }).then(function (r) {
+        var rot = acao === 'entrada' ? 'Sobra registrada' : acao === 'baixa' ? 'Baixa registrada' : 'Saldo definido';
+        toast(rot + '. Saldo do kit ' + cod + ': ' + (r && r.qtd != null ? r.qtd : '?'), 'ok');
+        return true;
+      })['catch'](function (e) {
+        toast(msgErro(e), 'err');
+        return false;
+      }).then(function (ok) {
+        estado.sobOcupado = false;
+        setBotoesSobra(false);
+        if (!ok) return false;
+        return carregarSobras(true, false).then(function () { return true; });
+      });
+    }
+
+    function registrarSobra() {
+      var cod = ($(id + 'SobKit').value || '').trim();
+      var qtd = Number($(id + 'SobQtd').value);
+      if (!cod) { toast('Digite o código do kit', 'err'); return; }
+      if (!estado.catalogo) { toast('Catálogo ainda carregando, tente de novo', 'err'); return; }
+      if (!catMapa[cod]) { toast('Código de kit não encontrado no catálogo', 'err'); return; }
+      if (!isFinite(qtd) || qtd < 1 || Math.floor(qtd) !== qtd) { toast('A quantidade deve ser um número inteiro de 1 ou mais', 'err'); return; }
+      executarSobra(cod, 'entrada', qtd, '').then(function (ok) {
+        if (!ok) return;
+        $(id + 'SobKit').value = '';
+        $(id + 'SobQtd').value = '1';
+        atualizarInfoSobra();
+        $(id + 'SheetSobNova').classList.remove('open');
+      });
+    }
+
+    function abrirNovaSobra() {
+      $(id + 'SobKit').value = '';
+      $(id + 'SobQtd').value = '1';
+      atualizarInfoSobra();
+      $(id + 'SheetSobNova').classList.add('open');
+      setTimeout(function () { var k = $(id + 'SobKit'); if (k) k.focus(); }, 120);
+    }
+
+    function textoMov(h) {
+      var n = Number(h.delta) || 0;
+      var acao = h.acao === 'entrada' ? 'Entrada +' + n
+               : h.acao === 'baixa' ? 'Baixa ' + n
+               : 'Ajuste (' + (n >= 0 ? '+' : '') + n + ')';
+      return '<div class="kit-falta-item">' + esc(acao) + ' = saldo ' + esc(h.qtd_apos) +
+        (h.usuario ? ' - ' + esc(h.usuario) : '') + ' em ' + esc(P.fmtDataHora(h.criado_em)) +
+        (h.obs ? '<br>' + esc(h.obs) : '') + '</div>';
+    }
+
+    function pintarSobra(cod) {
+      var o = catMapa[cod];
+      $(id + 'SobTitulo').textContent = 'Kit ' + cod;
+      $(id + 'SobCorpo').innerHTML = (o ? '<p class="small">' + descricaoKit(o) + '</p>' : '') +
+        '<p>Saldo atual: <b>' + esc(saldoSobra(cod)) + '</b> un</p>';
+      var h = $(id + 'SobHist');
+      h.textContent = 'Carregando...';
+      Promise.resolve().then(function () {
+        return nv().kitsSobrasHist({ kit: cod, limite: 30 });
+      }).then(function (lista) {
+        if (estado.sobAlvo !== cod) return;
+        h.innerHTML = (lista && lista.length) ? lista.map(textoMov).join('') : 'Nenhuma movimentação.';
+      })['catch'](function (e) {
+        if (estado.sobAlvo === cod) h.textContent = msgErro(e);
+      });
+      pintarDestinos(cod);
+    }
+
+    /* semanas de hoje em diante primeiro (as mais urgentes); as já passadas
+       ficam no fim. Dentro da semana, pela ordem da linha da planilha. */
+    function ordenarDestinos(lista) {
+      var abas = [];
+      lista.forEach(function (d) { if (abas.indexOf(d.aba) === -1) abas.push(d.aba); });
+      var cron = ordenarAbas(abas);
+      var ini = cron.indexOf(abaPadrao(abas));
+      var ordem = ini < 0 ? cron : cron.slice(ini).concat(cron.slice(0, ini));
+      return lista.slice().sort(function (a, b) {
+        var x = ordem.indexOf(a.aba) - ordem.indexOf(b.aba);
+        return x !== 0 ? x : Number(a.linha) - Number(b.linha);
+      });
+    }
+
+    /* cargas em que a coluna KIT ainda não está marcada e cujo produto usa este kit */
+    function pintarDestinos(cod) {
+      var el = $(id + 'SobDest');
+      if (!el) return;
+      estado.sobDest = null;
+      if (saldoSobra(cod) < 1) { el.textContent = 'Sem saldo deste kit para remanejar.'; return; }
+      el.textContent = 'Procurando cargas...';
+      Promise.resolve().then(function () {
+        return nv().kitsSobraDestinos(cod);
+      }).then(function (lista) {
+        if (estado.sobAlvo !== cod) return;
+        estado.sobDest = ordenarDestinos(lista || []);
+        renderDestinos();
+      })['catch'](function (e) {
+        if (estado.sobAlvo === cod) { estado.sobDest = null; el.textContent = msgErro(e); }
+      });
+    }
+
+    function renderDestinos() {
+      var el = $(id + 'SobDest');
+      var l = estado.sobDest;
+      if (!el || !l) return;
+      if (!l.length) {
+        el.textContent = 'Nenhuma carga precisa deste kit agora (todas já estão com a coluna KIT marcada).';
+        return;
+      }
+      var pode = podeEditar();
+      /* agrupa por semana (aba) e, dentro dela, por carga; o índice i continua
+         sendo o da lista ordenada, que é o que o botão data-rem usa */
+      var semanas = [], porSemana = {};
+      l.forEach(function (d, i) {
+        var s = porSemana[d.aba];
+        if (!s) { s = porSemana[d.aba] = { aba: d.aba, cargas: [], mapa: {} }; semanas.push(s); }
+        var ck = String(d.carga || '?');
+        var c = s.mapa[ck];
+        if (!c) { c = s.mapa[ck] = { carga: ck, itens: [] }; s.cargas.push(c); }
+        c.itens.push({ d: d, i: i });
+      });
+      el.innerHTML = '<p class="muted small">' + l.length + ' linha(s) ainda sem o kit liberado</p>' +
+        semanas.map(function (s) {
+          return '<div class="section-title">Semana ' + esc(s.aba) + '</div>' +
+            s.cargas.map(function (c) {
+              return '<div class="kit-falta-item"><b>Carga ' + esc(c.carga) + '</b>' +
+                c.itens.map(function (it) {
+                  return '<div>' + htmlNomeMaquina(it.d.produto) +
+                    ' <span class="muted small">(linha ' + esc(it.d.linha) + ')</span>' +
+                    (pode ? '<br><button class="btn primary" type="button" data-rem="' + it.i + '">Remanejar para esta carga</button>' : '') +
+                    '</div>';
+                }).join('') +
+              '</div>';
+            }).join('');
+        }).join('');
+      setBotoesSobra(estado.sobOcupado);
+    }
+
+    /* baixa de 1 unidade na sobra + marca KIT na linha escolhida */
+    function remanejarSobra(idx) {
+      var cod = estado.sobAlvo;
+      var d = estado.sobDest && estado.sobDest[idx];
+      if (!cod || !d) return;
+      if (!podeEditar()) { toast('Seu usuário não pode editar este módulo', 'err'); return; }
+      if (estado.sobOcupado) return;
+      if (saldoSobra(cod) < 1) { toast('Este kit não tem saldo para remanejar', 'err'); return; }
+      var rot = 'carga ' + (d.carga || '?') + ' (' + d.aba + ', linha ' + d.linha + ')';
+      if (!window.confirm('Remanejar 1 unidade do kit ' + cod + ' para a ' + rot + '?\n\nIsso marca KIT na planilha.')) return;
+      estado.sobOcupado = true;
+      setBotoesSobra(true);
+      Promise.resolve().then(function () {
+        return nv().kitsSobraRemanejar({
+          kit: cod, aba: d.aba, linha: d.linha, carga: d.carga, produto: d.produto, usuario: operador()
+        });
+      }).then(function (r) {
+        /* a aba Kits passa a mostrar a carga como liberada na próxima leitura */
+        cacheAba = {};
+        estado.t = 0;
+        toast('Kit ' + cod + ' remanejado para a ' + rot + '. Saldo: ' + (r && r.saldo != null ? r.saldo : '?'), 'ok');
+      })['catch'](function (e) {
+        toast(msgErro(e), 'err');
+      }).then(function () {
+        estado.sobOcupado = false;
+        setBotoesSobra(false);
+        return carregarSobras(true, false);
+      }).then(function () {
+        if (estado.sobAlvo === cod) pintarSobra(cod);
+      });
+    }
+
+    function abrirSobra(cod) {
+      estado.sobAlvo = cod;
+      $(id + 'SobMQtd').value = '1';
+      $(id + 'SobMObs').value = '';
+      pintarSobra(cod);
+      $(id + 'SheetSobra').classList.add('open');
+    }
+
+    function moverDaJanela(acao) {
+      var cod = estado.sobAlvo;
+      var qtd = Number($(id + 'SobMQtd').value);
+      var minimo = acao === 'ajuste' ? 0 : 1;
+      if (!cod) return;
+      if (!isFinite(qtd) || qtd < minimo || Math.floor(qtd) !== qtd) {
+        toast('Quantidade inválida (inteiro de ' + minimo + ' ou mais)', 'err');
+        return;
+      }
+      if (acao === 'baixa' && qtd > saldoSobra(cod)) { toast('Baixa maior que o saldo atual', 'err'); return; }
+      executarSobra(cod, acao, qtd, ($(id + 'SobMObs').value || '').trim()).then(function (ok) {
+        if (ok && estado.sobAlvo === cod) { $(id + 'SobMObs').value = ''; pintarSobra(cod); }
+      });
     }
 
     /* =========================================================
@@ -1375,9 +1777,45 @@ window.ModuloKits = (function () {
       $(id + 'SepCancela').addEventListener('click', function () { ss.classList.remove('open'); });
       $(id + 'SepOk').addEventListener('click', confirmarSeparar);
 
+      /* ---------- sobras ---------- */
+      var so = $(id + 'SheetSobra');
+      $(id + 'SobAtualizar').addEventListener('click', function () { carregarSobras(true, true); });
+      var sn = $(id + 'SheetSobNova');
+      $(id + 'SobAbrir').addEventListener('click', abrirNovaSobra);
+      $(id + 'SobCancelar').addEventListener('click', function () { sn.classList.remove('open'); });
+      sn.addEventListener('click', function (ev) {
+        if (ev.target === sn || ev.target.closest('.janela-x')) sn.classList.remove('open');
+      });
+      $(id + 'SobKit').addEventListener('input', atualizarInfoSobra);
+      $(id + 'SobRegistrar').addEventListener('click', registrarSobra);
+      $(id + 'SobQtd').addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); registrarSobra(); }
+      });
+      $(id + 'SobBusca').addEventListener('input', function (ev) {
+        var v = ev.target.value;
+        clearTimeout(tBuscaSob);
+        tBuscaSob = setTimeout(function () { estado.sobBusca = v; renderSobras(); }, 150);
+      });
+      $(id + 'SobItens').addEventListener('click', function (ev) {
+        var b = ev.target.closest('[data-sobra]');
+        if (b) abrirSobra(b.getAttribute('data-sobra'));
+      });
+      so.addEventListener('click', function (ev) {
+        if (ev.target === so || ev.target.closest('.janela-x')) so.classList.remove('open');
+      });
+      $(id + 'SobSomar').addEventListener('click', function () { moverDaJanela('entrada'); });
+      $(id + 'SobBaixa').addEventListener('click', function () { moverDaJanela('baixa'); });
+      $(id + 'SobDefinir').addEventListener('click', function () { moverDaJanela('ajuste'); });
+      $(id + 'SobDest').addEventListener('click', function (ev) {
+        var b = ev.target.closest('button[data-rem]');
+        if (b) remanejarSobra(Number(b.getAttribute('data-rem')));
+      });
+
       /* Esc fecha a janela que estiver por cima (PC) */
       document.addEventListener('keydown', function (ev) {
         if (ev.key !== 'Escape') return;
+        if (sn.classList.contains('open')) { sn.classList.remove('open'); return; }
+        if (so.classList.contains('open')) { so.classList.remove('open'); return; }
         if (sf.classList.contains('open')) { fecharFormFalta(); return; }
         if (ss.classList.contains('open')) { ss.classList.remove('open'); return; }
         if (sk.classList.contains('open')) fecharSheets();
@@ -1400,6 +1838,7 @@ window.ModuloKits = (function () {
         if (!montado) return;
         if (nome === id + '-lista') { renderLista(); carregar(false); }
         else if (nome === id + '-historico') { renderHistorico(); carregarHistorico(false); }
+        else if (nome === id + '-sobras') { renderSobras(); carregarSobras(false, false); }
       },
       fecharSheets: function () { if (montado) fecharSheets(); }
     };
