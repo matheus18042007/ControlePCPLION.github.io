@@ -512,6 +512,7 @@ input:focus{border-color:var(--accent)}
   background:var(--card-2);color:var(--muted);font-size:11px;font-weight:700
 }
 .kit-falta-tag{color:var(--danger);font-weight:600}
+.kit-cod-tag{color:var(--muted);font-weight:700;margin-left:6px}
 .kit-anilheiro{color:#ff2d2d;font-weight:800}
 
 .badge.kit-badge.liberado{background:rgba(255,197,66,.16);color:var(--warn)}
@@ -563,3 +564,62 @@ input:focus{border-color:var(--accent)}
 .kit-falta-edit{width:auto;flex:0 0 auto;padding:4px 12px;min-height:0;font-size:13px}
 .kit-falta-excluir{margin-top:10px;color:var(--danger,#c0392b);border-color:currentColor}
 .kit-falta-excluir[hidden]{display:none}
+
+/* =========================================================
+   MODULO FLUXO DE PRODUCAO (js/fluxo.js)
+   ========================================================= */
+.fluxo-total{font-size:34px;font-weight:800;color:var(--accent-2);line-height:1.1}
+.fluxo-pilha-h{display:flex;height:10px;border-radius:5px;overflow:hidden;margin-top:10px;background:var(--bg-2)}
+.fluxo-pilha-h>i{display:block;height:100%}
+/* setor expansivel (aba Dia) */
+.fluxo-sec>summary{list-style:none;cursor:pointer;display:flex;flex-direction:column;gap:8px;-webkit-tap-highlight-color:transparent}
+.fluxo-sec>summary::-webkit-details-marker{display:none}
+.fluxo-sec-top{display:flex;align-items:center;gap:10px}
+.fluxo-dot{width:10px;height:10px;border-radius:50%;flex:none}
+.fluxo-sec-nome{flex:1;min-width:0;font-weight:700;font-size:16px}
+.fluxo-sec-nome small{display:block;font-weight:400;font-size:11.5px;margin-top:2px}
+.fluxo-sec-qtd{font-size:24px;font-weight:800;color:var(--txt);font-variant-numeric:tabular-nums}
+.fluxo-sec-qtd.zero{color:var(--muted)}
+.fluxo-chev{font-size:24px;line-height:1;color:var(--muted);transition:transform .2s;width:14px;text-align:center}
+.fluxo-sec[open] .fluxo-chev{transform:rotate(90deg)}
+.fluxo-barra{height:6px;background:var(--bg-2);border-radius:3px;overflow:hidden}
+.fluxo-barra>i{display:block;height:100%;border-radius:3px}
+.fluxo-sec-corpo{margin-top:12px}
+.fluxo-ops>summary{cursor:pointer;color:var(--accent-2);font-size:13px;margin:12px 0 6px}
+/* dashboard */
+.fluxo-seg{display:flex;gap:6px}
+.fluxo-rotulo{font-weight:700;font-size:15px;margin:2px 2px 4px}
+.fluxo-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:12px}
+@media (min-width:720px){.fluxo-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.fluxo-kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.fluxo-kpi b{font-size:24px;font-weight:800;color:var(--accent-2);line-height:1.15;font-variant-numeric:tabular-nums}
+.fluxo-kpi small{font-size:11.5px}
+.fluxo-kpi-txt{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fluxo-card-tit{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-weight:700;margin-bottom:10px}
+.fluxo-card-tit small{font-weight:400;font-size:11.5px}
+.fluxo-hbar{display:grid;grid-template-columns:minmax(80px,36%) 1fr auto;align-items:center;gap:8px;margin:7px 0;font-size:13px;border-radius:8px}
+.fluxo-hbar[data-setor]{cursor:pointer;padding:2px 4px;margin:5px -4px}
+.fluxo-hbar[data-sel]{background:rgba(255,138,31,.12)}
+.fluxo-hbar .rot{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fluxo-hbar .trilho{height:14px;background:var(--bg-2);border-radius:7px;overflow:hidden}
+.fluxo-hbar .trilho>i{display:block;height:100%;border-radius:7px}
+.fluxo-hbar .val{font-weight:700;text-align:right;min-width:44px;font-variant-numeric:tabular-nums}
+.fluxo-hbar .val small{font-weight:400;color:var(--muted);margin-left:6px;font-size:11px}
+.fluxo-mais{margin-top:6px}
+.fluxo-cols{display:flex;gap:3px;height:180px;padding-top:16px}
+.fluxo-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center}
+.fluxo-col .area{flex:1;width:100%;position:relative}
+.fluxo-col em{position:absolute;left:-10px;right:-10px;text-align:center;font-style:normal;font-size:10.5px;font-weight:700;white-space:nowrap}
+.fluxo-col .pilha{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:44px;display:flex;flex-direction:column-reverse;border-radius:4px 4px 0 0;overflow:hidden}
+.fluxo-col .pilha>i{display:block;width:100%}
+.fluxo-col .pilha.zero{height:2px!important;background:var(--line)}
+.fluxo-col small{font-size:10px;color:var(--muted);margin-top:4px;height:12px;white-space:nowrap}
+.fluxo-legenda{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px;font-size:11.5px;color:var(--muted)}
+.fluxo-legenda i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.fluxo-tab{width:100%;border-collapse:collapse;font-size:13.5px}
+.fluxo-tab th{text-align:left;color:var(--muted);font-size:11.5px;text-transform:uppercase;padding:4px 6px}
+.fluxo-tab td{padding:5px 6px;border-top:1px solid var(--line)}
+.fluxo-tab .n{text-align:right;font-weight:600}
+.fluxo-op{font-weight:600;vertical-align:top}
+.fluxo-sub td,.fluxo-tab tfoot td{font-weight:700;color:var(--accent-2)}
+.pill:disabled{opacity:.5}

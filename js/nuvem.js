@@ -1012,7 +1012,26 @@ var Nuvem = (function () {
     return puxarPaginado('/' + nome + '?select=*', null, aoProgredir);
   }
 
+  /* Fluxo de Producao: o app so le (fluxo_producao ja vem agregado por
+     setor+dia+operador+cod+maquina, entao a ordem abaixo e unica e estavel). */
+  function fluxoDia(dia) {
+    return puxarPaginado('/fluxo_producao?select=setor,operador,cod,maquina,qtd&data=eq.' +
+      encodeURIComponent(dia) + '&order=setor,operador,cod,maquina');
+  }
+  /* periodo [de, ate] (inclusive) para o dashboard: sem operador, ordem pela chave */
+  function fluxoPeriodo(de, ate, aoProgredir) {
+    return puxarPaginado('/fluxo_producao?select=data,setor,cod,maquina,qtd&data=gte.' +
+      encodeURIComponent(de) + '&data=lte.' + encodeURIComponent(ate) +
+      '&order=data,setor,operador,cod,maquina', null, aoProgredir);
+  }
+  function fluxoFontes() {
+    return req('/fluxo_fontes?select=*');
+  }
+
   return {
+    fluxoDia: fluxoDia,
+    fluxoPeriodo: fluxoPeriodo,
+    fluxoFontes: fluxoFontes,
     puxarTabela: puxarTabela,
     carregar: carregar,
     contagem: contagem,

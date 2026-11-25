@@ -91,6 +91,16 @@ window.MODULOS = [
     tipo: 'kits'
   },
   {
+    id: 'fluxo',
+    nome: 'Fluxo de Produção',
+    desc: 'Produção do dia por setor (corte à montagem final), com operador, código e máquina.',
+    icone: '🏭',
+    titulo: 'Fluxo de Produção',
+    viewInicial: 'fluxo-dia',
+    pronto: true,
+    tipo: 'fluxo'
+  },
+  {
     id: 'banco',
     nome: 'Banco de Dados',
     desc: 'Backup completo, estrutura das tabelas, endereço da nuvem e notificações.',

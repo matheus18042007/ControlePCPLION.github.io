@@ -192,14 +192,16 @@ window.ModuloKits = (function () {
     return c;
   }
 
-  /* f.estado ('' = todos) e f.busca (carga ou produto, sem acento) */
+  /* f.estado ('' = todos) e f.busca (carga ou produto, sem acento);
+     f.extra(l) opcional: texto a mais pesquisavel (ex.: codigo do kit) */
   function filtrar(linhas, f) {
     var o = f || {};
     var est = o.estado || '';
     var q = norm(o.busca || '');
     return (linhas || []).filter(function (l) {
       if (est && (l.estado || derivarEstado(l)) !== est) return false;
-      if (q && norm(l.carga + ' ' + l.produto).indexOf(q) === -1) return false;
+      var extra = o.extra ? ' ' + o.extra(l) : '';
+      if (q && norm(l.carga + ' ' + l.produto + extra).indexOf(q) === -1) return false;
       return true;
     });
   }
@@ -382,6 +384,7 @@ window.ModuloKits = (function () {
       estado.carregando = true;
       estado.erro = '';
       renderLista();
+      try { garantirCatalogo(); } catch (e0) {}
       estado.promessa = carregarAbas(!!forcar).then(function (abas) {
         estado.abas = abas;
         if (!abas.length) {
@@ -476,7 +479,7 @@ window.ModuloKits = (function () {
         '    <button id="' + id + 'Atualizar" class="pill" type="button">&#8635; Atualizar</button>',
         '  </div>',
         '  <div class="searchbar">',
-        '    <input id="' + id + 'Busca" type="search" inputmode="search" placeholder="Buscar carga ou produto..." autocomplete="off">',
+        '    <input id="' + id + 'Busca" type="search" inputmode="search" placeholder="Buscar carga, produto ou kit..." autocomplete="off">',
         '    <button id="' + id + 'LimpaBusca" class="icon-btn" type="button" aria-label="Limpar">&times;</button>',
         '  </div>',
         '  <div id="' + id + 'Filtros" class="filters"></div>',
@@ -717,7 +720,7 @@ window.ModuloKits = (function () {
       return '<div class="li kit-li ' + l.estado + '"' + dataKit + '>' +
         '<div class="li-main">' +
           '<div class="li-nome">' + htmlNomeMaquina(l.produto || '(sem produto)') + seq + '</div>' +
-          '<div class="li-sub">Linha ' + l.linha + faltaTxt + '</div>' +
+          '<div class="li-sub">Linha ' + l.linha + kitsTxt(l) + faltaTxt + '</div>' +
         '</div>' +
         dir +
       '</div>';
@@ -736,7 +739,10 @@ window.ModuloKits = (function () {
       }
       if (!estado.linhas.length) { el.innerHTML = vazio('Esta aba não tem linhas de kit.'); return; }
 
-      var itens = filtrar(estado.linhas, { estado: estado.filtro, busca: estado.busca });
+      var itens = filtrar(estado.linhas, {
+        estado: estado.filtro, busca: estado.busca,
+        extra: function (l) { return kitsDaLinha(l).map(function (k) { return 'kit ' + k; }).join(' '); }
+      });
       if (!itens.length) { el.innerHTML = vazio('Nenhum kit com esse filtro.'); return; }
 
       var pode = podeEditar();
@@ -795,10 +801,42 @@ window.ModuloKits = (function () {
     function limpaNome(s) { return String(s == null ? '' : s).replace(/^\s*-\s*/, '').trim(); }
     function juntar(arr, v) { v = limpaNome(v); if (v && arr.indexOf(v) === -1) arr.push(v); }
 
+    /* produto_cod sem zeros a esquerda -> [kit_cod]; a planilha traz "08327",
+       o catalogo "8327" */
+    var kitsPorProduto = {};
+    function codSemZero(c) { return String(c == null ? '' : c).trim().replace(/^0+(?=\d)/, ''); }
+
+    function kitsDaLinha(l) {
+      var m = /(\d+)\s*-\s*\S/.exec(String((l && l.produto) || ''));
+      return (m && kitsPorProduto[codSemZero(m[1])]) || [];
+    }
+
+    function kitsTxt(l) {
+      var ks = kitsDaLinha(l);
+      return ks.length ? ' <span class="kit-cod-tag">Kit ' + esc(ks.join(', ')) + '</span>' : '';
+    }
+
+    /* o card da lista mostra o kit: carrega o catalogo em segundo plano */
+    function garantirCatalogo() {
+      if (estado.catalogo && cacheValido(estado.catT, Date.now(), CACHE_ABAS_MS)) return;
+      if (garantirCatalogo.p) return;
+      garantirCatalogo.p = Promise.resolve().then(function () { return nv().kitsCatalogo(); })
+        .then(function (r) {
+          if (r) { estado.catalogo = r; estado.catT = Date.now(); montarCatMapa(); renderLista(); }
+        }, function () { /* sem catalogo: card fica sem o codigo do kit */ })
+        .then(function () { garantirCatalogo.p = null; });
+    }
+
     function montarCatMapa() {
       catMapa = {};
+      kitsPorProduto = {};
       (estado.catalogo || []).forEach(function (r) {
         var k = String(r.kit_cod);
+        var pc = codSemZero(r.produto_cod);
+        if (pc) {
+          var lk = kitsPorProduto[pc] || (kitsPorProduto[pc] = []);
+          if (lk.indexOf(k) === -1) lk.push(k);
+        }
         var o = catMapa[k] || (catMapa[k] = { cod: k, nome: limpaNome(r.kit_nome), produtos: [], quadros: [], anilheiros: [] });
         juntar(o.produtos, r.produto_nome || r.produto_cod);
         juntar(o.quadros, r.quadro_pint_nome || r.quadro_nome);

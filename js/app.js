@@ -314,6 +314,7 @@ function motorDoTipo(tipo) {
   if (tipo === 'eficiencia') return window.ModuloEficiencia;
   if (tipo === 'faltas') return window.ModuloFaltas;
   if (tipo === 'kits') return window.ModuloKits;
+  if (tipo === 'fluxo') return window.ModuloFluxo;
   if (tipo === 'banco') return window.ModuloBanco;
   return null;
 }
@@ -324,7 +325,7 @@ window.motorDoTipo = motorDoTipo;
 
 function motoresAtivos() {
   return [window.ModuloContagem, window.ModuloEficiencia,
-          window.ModuloFaltas, window.ModuloKits,
+          window.ModuloFaltas, window.ModuloKits, window.ModuloFluxo,
           window.ModuloBanco].filter(Boolean);
 }
 

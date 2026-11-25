@@ -7,7 +7,7 @@
    este arquivo nao serve para nada.
 
    Usuarios: Matheus movio, Alan Marques, joao victor, Kauã, Gabriel B., Gabriel Kirschner, cesar, Norrany, Almoxarifado Frente
-   Gerado em: 18/11/2026, 16:45:45
+   Gerado em: 25/11/2026, 13:43:57
    ========================================================= */
 var COFRE = {
   "v": 1,
@@ -33,6 +33,7 @@ var COFRE = {
         "eficiencia",
         "faltas",
         "kits",
+        "fluxo",
         "banco"
       ],
       "edita": [
