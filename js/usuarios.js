@@ -6,8 +6,8 @@
    (PBKDF2-SHA256, 310000 rodadas). Sem senha valida,
    este arquivo nao serve para nada.
 
-   Usuarios: Matheus movio, Alan Marques, joao victor, Kauã, Gabriel B., Gabriel Kirschner, cesar, Norrany, Almoxarifado Frente
-   Gerado em: 25/11/2026, 15:59:21
+   Usuarios: Matheus movio, Alan Marques, joao victor, Kauã, Gabriel B., Gabriel Kirschner, cesar, Norrany, Almoxarifado Frente, Matheus consultor
+   Gerado em: 25/11/2026, 16:27:55
    ========================================================= */
 var COFRE = {
   "v": 1,
@@ -171,6 +171,19 @@ var COFRE = {
       "edita": [
         "kits"
       ]
+    },
+    {
+      "login": "Matheus consultor",
+      "nome": "Matheus consultor",
+      "salt": "j1bbvY+jflfgPnpFRnA4Mw==",
+      "env": {
+        "iv": "cSwXoibQyUSlVkuV",
+        "ct": "SfMMC0cG6/AK1W0A/k32xQveLP5A59iEwqqe9cFSYHgKXcGnb3whyiuJY54Bqu+P"
+      },
+      "mods": [
+        "fluxo"
+      ],
+      "edita": []
     }
   ]
 };
