@@ -7,7 +7,7 @@
    este arquivo nao serve para nada.
 
    Usuarios: Matheus movio, Alan Marques, joao victor, Kauã, Gabriel B., Gabriel Kirschner, cesar, Norrany, Almoxarifado Frente, Matheus consultor, clayton alves
-   Gerado em: 26/11/2026, 12:54:21
+   Gerado em: 26/11/2026, 12:56:50
    ========================================================= */
 var COFRE = {
   "v": 1,
@@ -189,10 +189,10 @@ var COFRE = {
     {
       "login": "clayton alves",
       "nome": "clayton alves",
-      "salt": "aUO4TRXnA0hWFvCUFFRkgg==",
+      "salt": "XzO9FEUw+J5COJ6YqTj8Rw==",
       "env": {
-        "iv": "wVXjnE7D34ecLHyD",
-        "ct": "YniMol+zHybkTrOPsyNVYndcvdcKt0kDrCKBdQbx64pbzmzIOjJPXwMe9AY9PeVT"
+        "iv": "AKHMjxtdL7kljZsL",
+        "ct": "gh8ai4AdHcwJWebNMTl5F129Eo1gFH3aETD4icU1NF2IO367vsLXxvu/SLsa0VY2"
       },
       "mods": [
         "faltas",
