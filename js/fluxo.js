@@ -440,6 +440,12 @@ window.ModuloFluxo = (function () {
         '    <div id="' + id + 'Total" class="fluxo-total">0</div>',
         '    <div id="' + id + 'Resumo"></div></div>',
         '  <div id="' + id + 'Setores"></div>',
+        '  <div class="card">',
+        '    <div class="muted small">Resumo no celular: todo dia às 07h30, com o total do dia anterior por setor.</div>',
+        '    <div class="kv"><span>Neste aparelho</span><b id="' + id + 'PushEstado">-</b></div>',
+        '    <button id="' + id + 'PushAtivar" class="btn primary block" type="button">Ativar resumo</button>',
+        '    <button id="' + id + 'PushEnviar" class="btn block hidden" type="button">Enviar resumo deste dia agora</button>',
+        '  </div>',
         '</section>',
         '<section id="view-' + id + '-dash" class="view" data-modulo="' + id + '">',
         '  <div class="kits-topo">',
@@ -492,6 +498,32 @@ window.ModuloFluxo = (function () {
         else if (el.classList.contains('fluxo-ops')) estado.opsAbertos[k] = el.open;
       }, true);
 
+      /* resumo diário no celular (lista própria, separada das Faltas) */
+      $(id + 'PushAtivar').addEventListener('click', function () {
+        if (!window.Push) return;
+        var b = $(id + 'PushAtivar');
+        var ligado = b.getAttribute('data-on') === '1';
+        b.disabled = true;
+        (ligado ? Push.fluxo.desativar().then(function () { return 'Resumo desativado neste aparelho'; })
+                : Push.fluxo.ativar()
+        ).then(function (msg) { toast(msg, 'ok'); })
+          .catch(function (e) { toast(e.message, 'err'); })
+          .then(renderPush);
+      });
+      $(id + 'PushEnviar').addEventListener('click', function () {
+        if (!window.Nuvem || !Nuvem.push || !Nuvem.push.fluxoNotificar) return;
+        var b = $(id + 'PushEnviar');
+        b.disabled = true;
+        Nuvem.push.fluxoNotificar(estado.dia).then(function (r) {
+          if (r.motivo === 'cooldown') toast('Aguarde 1 minuto entre envios', 'err');
+          else if (!r.inscritos) toast('Nenhum aparelho ativou o resumo', 'err');
+          else toast('Resumo de ' + br(estado.dia) + ' enviado para ' + (r.enviadas || 0) +
+                     ' de ' + r.inscritos + ' aparelho(s)', 'ok');
+        }).catch(function (e) {
+          toast('Falha ao enviar: ' + e.message, 'err');
+        }).then(function () { b.disabled = false; });
+      });
+
       /* aba Dashboard */
       $(id + 'Modo').addEventListener('click', function (ev) {
         var b = ev.target.closest('[data-modo]');
@@ -526,6 +558,29 @@ window.ModuloFluxo = (function () {
 
       render();
       renderDash();
+      renderPush();
+    }
+
+    /* "Enviar agora" só para quem tem edição no Fluxo (admin.html) */
+    function podeEnviar() {
+      var A = window.Auth;
+      if (!A || !A.podeEditar) return true;
+      return !!A.podeEditar(id);
+    }
+
+    function renderPush() {
+      var el = $(id + 'PushEstado'), b = $(id + 'PushAtivar');
+      if (!el || !b) return;
+      $(id + 'PushEnviar').classList.toggle('hidden', !podeEnviar());
+      if (!window.Push) { el.textContent = 'Não suportado'; b.disabled = true; return; }
+      Push.fluxo.estado().then(function (s) {
+        var ligado = s === 'Ativado';
+        el.textContent = s;
+        b.setAttribute('data-on', ligado ? '1' : '');
+        b.textContent = ligado ? 'Desativar resumo' : 'Ativar resumo';
+        b.classList.toggle('primary', !ligado);
+        b.disabled = !(ligado || s === 'Desativado');
+      });
     }
 
     var promessa = null;
@@ -537,7 +592,7 @@ window.ModuloFluxo = (function () {
       },
       aoMostrarView: function (nome) {
         if (!montado) return;
-        if (nome === id + '-dia') carregar();
+        if (nome === id + '-dia') { carregar(); renderPush(); }
         if (nome === id + '-dash') { dash.cache = {}; carregarDash(); }
       },
       fecharSheets: function () {}

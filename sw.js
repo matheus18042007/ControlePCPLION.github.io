@@ -8,7 +8,7 @@
    Para publicar uma atualização: mudar CACHE_VERSION abaixo.
    ============================================================ */
 
-var CACHE_VERSION = 'pcp-lion-v3.0';
+var CACHE_VERSION = 'pcp-lion-v3.2';
 
 var ARQUIVOS = [
   './',
@@ -75,9 +75,11 @@ self.addEventListener('push', function (e) {
       body: dados.corpo || '',
       icon: './icons/icon-192.png',
       badge: './icons/icon-192.png',
-      tag: 'faltas-vg',
+      /* Faltas não manda tag/url e segue igual; o Fluxo manda
+         tag própria para não substituir a notificação das Faltas */
+      tag: dados.tag || 'faltas-vg',
       renotify: true,
-      data: { url: './#faltas' }
+      data: { url: dados.url || './#faltas' }
     })
   );
 });
@@ -89,7 +91,8 @@ self.addEventListener('notificationclick', function (e) {
       for (var i = 0; i < lista.length; i++) {
         if ('focus' in lista[i]) return lista[i].focus();
       }
-      if (self.clients.openWindow) return self.clients.openWindow('./#faltas');
+      var url = (e.notification.data && e.notification.data.url) || './#faltas';
+      if (self.clients.openWindow) return self.clients.openWindow(url);
     })
   );
 });

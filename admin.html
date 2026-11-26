@@ -19,7 +19,12 @@
        border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
   .u b { font-size: 14px; }
   .u small { color: var(--muted); }
-  .u .grow { flex: 1; }
+  .u { flex-wrap: wrap; }
+.u .grow { flex: 1; }
+.mods { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px 14px;
+border-top: 1px solid var(--line); padding-top: 8px; margin-top: 2px; }
+.mods label { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--muted); }
+.mods input { width: auto; margin: 0; }
   .x { background: transparent; border: 1px solid var(--danger); color: var(--danger);
        border-radius: 8px; padding: 5px 10px; font-size: 12px; }
   pre { background: #0b0f14; border: 1px solid var(--line); border-radius: 10px;
@@ -104,6 +109,8 @@
     </div>
     <label class="lbl" for="uSenha">Senha (mínimo 6 caracteres)</label>
     <input id="uSenha" type="text" autocomplete="off">
+    <label class="lbl">Módulos que ele pode ver</label>
+    <div id="modsNovo" class="mods" style="border:0;padding:0;margin:0 0 12px"></div>
     <button id="btnAddUser" class="btn primary block" type="button">Salvar usuário</button>
   </section>
 
@@ -124,10 +131,12 @@
     <div class="passo">Passo final</div>
     <h3>Gerar o arquivo</h3>
     <p class="aviso">
-      Baixe o arquivo e coloque em <code>js/usuarios.js</code> (substituindo o antigo),
-      depois publique no GitHub. Enquanto você não fizer isso, nada mudou para os operadores.
+      Salve por cima de <code>js/usuarios.js</code> e depois publique no GitHub.
+      Enquanto você não publicar, nada mudou para os operadores.
     </p>
-    <button id="btnBaixar" class="btn primary block" type="button">⭳ Baixar usuarios.js</button>
+    <p id="arqDestino" class="muted small"></p>
+    <button id="btnBaixar" class="btn primary block" type="button">⭳ Salvar usuarios.js</button>
+    <button id="btnTrocarArq" class="btn ghost block oculto" type="button">Escolher outro arquivo</button>
     <button id="btnCopiar" class="btn ghost block" type="button">Copiar conteúdo</button>
     <pre id="previa"></pre>
   </section>
@@ -137,6 +146,7 @@
 <div id="toast" class="toast"></div>
 
 <script src="./js/usuarios.js"></script>
+<script src="./js/modulos.js"></script>
 <script src="./js/auth.js"></script>
 <script>
 (function () {
@@ -152,6 +162,8 @@ function toast(msg, kind) {
   tmr = setTimeout(function () { t.className = 'toast'; }, 3000);
 }
 function mostrar(id, sim) { $(id).classList.toggle('oculto', !sim); }
+
+var MODS = window.MODULOS || [];
 
 var cofre = null;         // objeto em edicao
 var mestraBytes = null;   // chave-mestra aberta (Uint8Array)
@@ -182,9 +194,51 @@ function abriuCofre() {
   mostrar('secUsuarios', true);
   mostrar('secNuvem', true);
   mostrar('secGerar', true);
+  pintarModsNovo();
   pintarUsuarios();
   gerar();
 }
+
+/* Modulos com permissao de edicao (Auth.MODULOS_COM_EDICAO) ganham a caixa
+   "Editar" ao lado de "Ver". Desmarcar Ver desmarca Editar; marcar Editar marca Ver.
+   data-k: 'ver' | 'ed'. Escopo: o container .mods mais proximo. */
+function comEdicao(id) { return Auth.MODULOS_COM_EDICAO.indexOf(id) !== -1; }
+
+function caixaEditar(m, attrs, marcado) {
+  return comEdicao(m.id)
+    ? '<label><input type="checkbox" data-k="ed" ' + attrs + ' value="' + m.id + '"' + (marcado ? ' checked' : '') + '> Editar</label>'
+    : '';
+}
+
+function sincVerEdita(c) {
+  var raiz = c.closest('.mods'), ver = c.dataset.k === 'ver';
+  var outro = raiz.querySelector('[data-k="' + (ver ? 'ed' : 'ver') + '"][value="' + c.value + '"]');
+  if (!outro) return;
+  if (ver && !c.checked) outro.checked = false;
+  if (!ver && c.checked) outro.checked = true;
+}
+
+function marcados(raiz, k) {
+  var sel = [];
+  Array.prototype.forEach.call(raiz.querySelectorAll('[data-k="' + k + '"]'), function (o) {
+    if (o.checked) sel.push(o.value);
+  });
+  return sel;
+}
+
+function pintarModsNovo() {
+  var raiz = $('modsNovo');
+  raiz.innerHTML = MODS.map(function (m) {
+    return '<label><input type="checkbox" data-k="ver" value="' + m.id + '" checked> ' + m.nome + '</label>' +
+           caixaEditar(m, '', false);
+  }).join('');
+  Array.prototype.forEach.call(raiz.querySelectorAll('[data-k]'), function (c) {
+    c.addEventListener('change', function () { sincVerEdita(c); });
+  });
+}
+
+function modsNovoSelecionados() { return marcados($('modsNovo'), 'ver'); }
+function editaNovoSelecionados() { return marcados($('modsNovo'), 'ed'); }
 
 function pintarUsuarios() {
   var box = $('listaUsuarios');
@@ -193,10 +247,27 @@ function pintarUsuarios() {
     return;
   }
   box.innerHTML = cofre.usuarios.map(function (u) {
+    var mods = u.mods || MODS.map(function (m) { return m.id; });
+    var edita = u.edita || [];
     return '<div class="u"><div class="grow"><b>' + u.login + '</b><br>' +
            '<small>' + (u.nome || '') + '</small></div>' +
-           '<button class="x" data-rm="' + u.login + '" type="button">Remover</button></div>';
+           '<button class="x" data-rm="' + u.login + '" type="button">Remover</button>' +
+           '<div class="mods">' + MODS.map(function (m) {
+             var ed = edita.indexOf(m.id) !== -1;
+             return '<label><input type="checkbox" data-k="ver" data-user="' + u.login + '" value="' + m.id + '"' +
+                    (ed || mods.indexOf(m.id) !== -1 ? ' checked' : '') + '> ' + m.nome + '</label>' +
+                    caixaEditar(m, 'data-user="' + u.login + '"', ed);
+           }).join('') + '</div></div>';
   }).join('');
+  Array.prototype.forEach.call(box.querySelectorAll('[data-user]'), function (c) {
+    c.addEventListener('change', function () {
+      var lg = c.dataset.user, raiz = c.closest('.mods');
+      sincVerEdita(c);
+      Auth.admin.setMods(cofre, lg, marcados(raiz, 'ver'), marcados(raiz, 'ed'));
+      gerar();
+      toast('Permissões de ' + lg + ' atualizadas.', 'ok');
+    });
+  });
   Array.prototype.forEach.call(box.querySelectorAll('[data-rm]'), function (b) {
     b.addEventListener('click', function () {
       if (cofre.usuarios.length <= 1) { toast('Precisa sobrar pelo menos um usuário.', 'err'); return; }
@@ -271,9 +342,10 @@ $('btnAddUser').addEventListener('click', function () {
 
   var btn = this;
   btn.disabled = true; btn.textContent = 'Salvando...';
-  Auth.admin.addUsuario(cofre, mestraBytes, { login: lg, nome: nm, senha: sn })
+  Auth.admin.addUsuario(cofre, mestraBytes, { login: lg, nome: nm, senha: sn, mods: modsNovoSelecionados(), edita: editaNovoSelecionados() })
     .then(function () {
       $('uLogin').value = ''; $('uNome').value = ''; $('uSenha').value = '';
+      pintarModsNovo();
       pintarUsuarios(); gerar();
       toast('Usuário salvo: ' + lg, 'ok');
     })
@@ -300,7 +372,44 @@ function gerar() {
   $('previa').textContent = conteudo;
 }
 
-$('btnBaixar').addEventListener('click', function () {
+/* Salvar por cima: no Chrome/Edge do PC (File System Access API) o admin
+   escolhe js/usuarios.js uma vez; o "handle" fica no IndexedDB e os proximos
+   cliques gravam direto nele. Sem a API (Firefox, Safari, celular) cai no
+   download comum. */
+var PODE_GRAVAR = typeof window.showSaveFilePicker === 'function';
+var arqHandle = null;
+
+function idbHandle(modo, valor) {
+  return new Promise(function (ok, falha) {
+    var req = indexedDB.open('pcp-admin', 1);
+    req.onupgradeneeded = function () { req.result.createObjectStore('arquivos'); };
+    req.onerror = function () { falha(req.error); };
+    req.onsuccess = function () {
+      var tx = req.result.transaction('arquivos', modo);
+      var st = tx.objectStore('arquivos');
+      var r = modo === 'readonly' ? st.get('usuarios')
+            : valor ? st.put(valor, 'usuarios') : st.delete('usuarios');
+      r.onsuccess = function () { ok(r.result); };
+      r.onerror = function () { falha(r.error); };
+    };
+  });
+}
+
+function pintarDestino() {
+  $('arqDestino').textContent = !PODE_GRAVAR
+    ? 'Este navegador só baixa o arquivo: coloque-o em js/usuarios.js na mão.'
+    : arqHandle ? 'Grava direto em: ' + arqHandle.name + ' (o que você escolheu antes).'
+    : 'No 1º clique, escolha o arquivo js/usuarios.js da pasta do app.';
+  $('btnTrocarArq').classList.toggle('oculto', !arqHandle);
+}
+
+if (PODE_GRAVAR) {
+  idbHandle('readonly').then(function (h) { arqHandle = h || null; pintarDestino(); })
+    .catch(function () { pintarDestino(); });
+}
+pintarDestino();
+
+function baixarComum() {
   var blob = new Blob([conteudo], { type: 'text/javascript' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -308,12 +417,51 @@ $('btnBaixar').addEventListener('click', function () {
   document.body.appendChild(a); a.click();
   setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
   toast('Baixado. Coloque em js/usuarios.js e publique.', 'ok');
-});
+}
+
+function escolherArquivo() {
+  return window.showSaveFilePicker({
+    suggestedName: 'usuarios.js',
+    types: [{ description: 'JavaScript', accept: { 'text/javascript': ['.js'] } }]
+  }).then(function (h) {
+    arqHandle = h;
+    return idbHandle('readwrite', h).catch(function () {}).then(function () { return h; });
+  });
+}
+
+function gravar(h) {
+  return h.requestPermission({ mode: 'readwrite' }).then(function (p) {
+    if (p !== 'granted') throw new Error('Permissão negada para gravar no arquivo.');
+    return h.createWritable();
+  }).then(function (w) {
+    return w.write(conteudo).then(function () { return w.close(); });
+  });
+}
+
+function salvar(trocar) {
+  if (!PODE_GRAVAR) { baixarComum(); return; }
+  var p = (!trocar && arqHandle) ? Promise.resolve(arqHandle) : escolherArquivo();
+  p.then(gravar).then(function () {
+    pintarDestino();
+    toast('Salvo em ' + arqHandle.name + '. Agora é só publicar.', 'ok');
+  }).catch(function (e) {
+    if (e && e.name === 'AbortError') return; /* fechou o seletor */
+    if (e && e.name === 'NotFoundError') {    /* arquivo movido/apagado */
+      arqHandle = null; idbHandle('readwrite', null).catch(function () {}); pintarDestino();
+      toast('Não achei mais o arquivo. Clique de novo e escolha js/usuarios.js.', 'err');
+      return;
+    }
+    toast('Erro ao salvar: ' + (e && e.message || e), 'err');
+  });
+}
+
+$('btnBaixar').addEventListener('click', function () { salvar(false); });
+$('btnTrocarArq').addEventListener('click', function () { salvar(true); });
 
 $('btnCopiar').addEventListener('click', function () {
   navigator.clipboard.writeText(conteudo)
     .then(function () { toast('Copiado.', 'ok'); })
-    .catch(function () { toast('Não consegui copiar - use o botão Baixar.', 'err'); });
+    .catch(function () { toast('Não consegui copiar - use o botão Salvar.', 'err'); });
 });
 
 })();

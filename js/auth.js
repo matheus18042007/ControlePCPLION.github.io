@@ -158,7 +158,8 @@ var Auth = (function () {
      Ver: sem lista "mods" no cofre = ve tudo (cofre antigo); "edita" implica ver.
      Editar: modulos de MODULOS_COM_EDICAO exigem o id em "edita" (ausente = false);
      os demais seguem igual a podeVer (comportamento legado). */
-  var MODULOS_COM_EDICAO = ['kits'];
+  /* fluxo: "edita" libera o botão "Enviar resumo agora" (js/fluxo.js) */
+  var MODULOS_COM_EDICAO = ['kits', 'fluxo'];
 
   function podeVer(id) {
     var u = sessao ? acharUsuario(sessao.login) : null;

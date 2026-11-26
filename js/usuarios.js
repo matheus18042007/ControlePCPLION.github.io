@@ -7,7 +7,7 @@
    este arquivo nao serve para nada.
 
    Usuarios: Matheus movio, Alan Marques, joao victor, Kauã, Gabriel B., Gabriel Kirschner, cesar, Norrany, Almoxarifado Frente, Matheus consultor
-   Gerado em: 25/11/2026, 16:27:55
+   Gerado em: 26/11/2026, 08:12:00
    ========================================================= */
 var COFRE = {
   "v": 1,
@@ -37,7 +37,8 @@ var COFRE = {
         "banco"
       ],
       "edita": [
-        "kits"
+        "kits",
+        "fluxo"
       ]
     },
     {

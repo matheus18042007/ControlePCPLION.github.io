@@ -778,6 +778,66 @@ var Nuvem = (function () {
         if (timer) clearTimeout(timer);
         return null;
       });
+    },
+
+    /* so leitura: este aparelho esta na lista das Faltas? (a subscription
+       do navegador pode existir so por causa do Fluxo) */
+    faltasStatus: function (endpoint) {
+      return req('/rpc/faltas_push_status', {
+        method: 'POST',
+        body: { p_endpoint: endpoint }
+      }).then(function (r) { return r === true; });
+    },
+
+    /* ---- Fluxo de Producao: lista propria (fluxo_push), separada
+       das Faltas. Ver supabase/patch_fluxo_notificar.sql. ---- */
+    fluxoRegistrar: function (sub, usuario) {
+      var j = sub.toJSON ? sub.toJSON() : sub;
+      return req('/rpc/fluxo_push_registrar', {
+        method: 'POST',
+        body: {
+          p_endpoint: j.endpoint,
+          p_p256dh: j.keys && j.keys.p256dh,
+          p_auth: j.keys && j.keys.auth,
+          p_usuario: usuario || null,
+          p_aparelho: aparelho()
+        }
+      });
+    },
+
+    fluxoRemover: function (endpoint) {
+      return req('/rpc/fluxo_push_remover', {
+        method: 'POST',
+        body: { p_endpoint: endpoint }
+      });
+    },
+
+    fluxoStatus: function (endpoint) {
+      return req('/rpc/fluxo_push_status', {
+        method: 'POST',
+        body: { p_endpoint: endpoint }
+      }).then(function (r) { return r === true; });
+    },
+
+    /* botao "Enviar agora": manda o resumo do dia escolhido.
+       Diferente do notificar das Faltas, aqui o erro sobe para a tela. */
+    fluxoNotificar: function (dia) {
+      if (!ativa()) return Promise.reject(new Error('Nuvem nao configurada'));
+      return fetch(cfg.url + '/functions/v1/fluxo-notificar', {
+        method: 'POST',
+        headers: {
+          apikey: cfg.key,
+          Authorization: 'Bearer ' + cfg.key,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ forcar: true, data: dia }),
+        cache: 'no-store'
+      }).then(function (r) {
+        return r.json().catch(function () { return null; }).then(function (j) {
+          if (!r.ok) throw new Error((j && (j.erro || j.message)) || ('HTTP ' + r.status));
+          return j || {};
+        });
+      });
     }
   };
 

@@ -51,11 +51,20 @@ var Push = (function () {
       return Promise.resolve('Bloqueado nas permissões do navegador');
     }
     return inscricaoAtual().then(function (sub) {
-      return sub ? 'Ativado' : 'Desativado';
+      if (!sub) return 'Desativado';
+      /* a subscription pode existir só por causa do Fluxo: confere a
+         lista das Faltas. Sem a RPC (SQL antigo) ou offline, mantém o
+         comportamento de antes. */
+      if (!(window.Nuvem && Nuvem.ativa() && Nuvem.push.faltasStatus)) return 'Ativado';
+      return Nuvem.push.faltasStatus(sub.endpoint).then(function (ok) {
+        return ok ? 'Ativado' : 'Desativado';
+      }).catch(function () { return 'Ativado'; });
     });
   }
 
-  function ativar() {
+  /* permissão + subscription do navegador (uma só por aparelho,
+     compartilhada por Faltas e Fluxo; cada módulo tem sua lista no banco) */
+  function inscrever() {
     if (!suportado()) return Promise.reject(new Error('Este navegador não suporta notificações'));
     if (!configurado()) return Promise.reject(new Error('Chave VAPID não configurada no js/push.js'));
 
@@ -74,8 +83,17 @@ var Push = (function () {
       if (!(window.Nuvem && Nuvem.ativa())) {
         throw new Error('Faça login no cofre antes de ativar as notificações');
       }
-      var usuario = (window.PCP && PCP.operador && PCP.operador()) || null;
-      return Nuvem.push.registrar(sub, usuario).then(function () {
+      return sub;
+    });
+  }
+
+  function usuarioAtual() {
+    return (window.PCP && PCP.operador && PCP.operador()) || null;
+  }
+
+  function ativar() {
+    return inscrever().then(function (sub) {
+      return Nuvem.push.registrar(sub, usuarioAtual()).then(function () {
         return 'Notificações ativadas neste aparelho';
       });
     });
@@ -85,20 +103,67 @@ var Push = (function () {
     return inscricaoAtual().then(function (sub) {
       if (!sub) return true;
       var endpoint = sub.endpoint;
-      return sub.unsubscribe().then(function () {
-        if (window.Nuvem && Nuvem.ativa()) {
-          return Nuvem.push.remover(endpoint).catch(function () { return true; });
-        }
-        return true;
+      var nuvem = window.Nuvem && Nuvem.ativa();
+      /* se o aparelho também recebe o Fluxo, só sai da lista das Faltas:
+         cancelar a subscription do navegador mataria o Fluxo junto */
+      var noFluxo = nuvem
+        ? Nuvem.push.fluxoStatus(endpoint).catch(function () { return false; })
+        : Promise.resolve(false);
+      return noFluxo.then(function (fluxoAtivo) {
+        if (fluxoAtivo) return Nuvem.push.remover(endpoint);
+        return sub.unsubscribe().then(function () {
+          if (nuvem) {
+            return Nuvem.push.remover(endpoint).catch(function () { return true; });
+          }
+          return true;
+        });
       });
     });
   }
+
+  /* ---------- Fluxo de Produção: resumo diário às 07h30 ----------
+     Lista própria no banco (fluxo_push). Desativar só tira este aparelho
+     da lista do Fluxo: NÃO cancela a subscription do navegador, senão as
+     Faltas também parariam de chegar. */
+  var fluxo = {
+    estado: function () {
+      if (!suportado()) return Promise.resolve('Não suportado neste navegador');
+      if (!configurado()) return Promise.resolve('Chave VAPID não configurada');
+      if (Notification.permission === 'denied') {
+        return Promise.resolve('Bloqueado nas permissões do navegador');
+      }
+      return inscricaoAtual().then(function (sub) {
+        if (!sub) return 'Desativado';
+        if (!(window.Nuvem && Nuvem.ativa())) return 'Desativado';
+        return Nuvem.push.fluxoStatus(sub.endpoint).then(function (ok) {
+          return ok ? 'Ativado' : 'Desativado';
+        }).catch(function () { return 'Sem conexão'; });
+      });
+    },
+    ativar: function () {
+      return inscrever().then(function (sub) {
+        return Nuvem.push.fluxoRegistrar(sub, usuarioAtual()).then(function () {
+          return 'Resumo do Fluxo ativado neste aparelho';
+        });
+      });
+    },
+    desativar: function () {
+      return inscricaoAtual().then(function (sub) {
+        if (!sub) return true;
+        if (!(window.Nuvem && Nuvem.ativa())) {
+          throw new Error('Faça login no cofre para desativar');
+        }
+        return Nuvem.push.fluxoRemover(sub.endpoint);
+      });
+    }
+  };
 
   return {
     suportado: suportado,
     configurado: configurado,
     estado: estado,
     ativar: ativar,
-    desativar: desativar
+    desativar: desativar,
+    fluxo: fluxo
   };
 })();

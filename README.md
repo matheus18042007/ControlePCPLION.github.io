@@ -103,6 +103,7 @@ idempotentes e podem ser rodados de novo sem apagar dados.
 | `patch_maquinas_cores.sql` | Cor do quadro e da articulação nas máquinas (ver abaixo) |
 | `patch_maquinas_modulo.sql` | Separa `maquinas` de `quadro` (módulo próprio) |
 | `patch_maquinas_copiar.sql` | Cópia única do que foi contado como máquina em `quadro` para `maquinas` |
+| `patch_fluxo_notificar.sql` | Fluxo de Produção: inscrição de aparelhos (`fluxo_push`), estado do envio e agendamento diário 07h30 (`pg_cron`) |
 
 **Ordem para as máquinas:** `patch_maquinas_cores.sql` primeiro, depois
 `patch_maquinas_modulo.sql`, e por fim (opcional, uma vez só)
@@ -335,7 +336,8 @@ O módulo Kits usa essa mesma base para preencher o nome ao registrar falta.
 
 ### Notificações (push)
 
-Único módulo com notificação. Toda falta registrada bate na Edge Function
+Além do Faltas, só o Fluxo de Produção notifica (resumo diário, ver
+"Notificação do Fluxo de Produção" abaixo). Toda falta registrada bate na Edge Function
 `faltas-notificar` — o cliente **não** decide se envia, só avisa que tem
 novidade.
 
@@ -376,6 +378,30 @@ supabase secrets set VAPID_PUBLIC=... VAPID_PRIVATE=... VAPID_SUBJECT=mailto:voc
 ```
 
 Sem isso o módulo funciona inteiro — só não notifica.
+
+### Notificação do Fluxo de Produção
+
+Independente das Faltas: tabela, funções e Edge Function próprias. Desativar
+um não mexe no outro.
+
+- Todo dia às **07h30 (Brasília)** o `pg_cron` chama a Edge Function
+  `fluxo-notificar`, que manda o resumo do **dia anterior** (total e por setor)
+  para os aparelhos inscritos no Fluxo. Dia sem produção não envia nada.
+- Cada aparelho ativa na aba Dia do módulo Fluxo (`fluxo_push`, separada de
+  `push_subscriptions`). Usa a mesma subscription do navegador que o Faltas.
+- Quem tem edição no Fluxo (`MODULOS_COM_EDICAO` inclui `fluxo`) vê o botão
+  **Enviar resumo agora**, que manda o resumo do dia escolhido na tela.
+- `fluxo_notif_estado` guarda o último dia enviado; o envio automático não
+  repete o mesmo dia.
+
+Implantação (uma vez):
+
+1. Rodar `supabase/patch_fluxo_notificar.sql` no SQL Editor, **antes** trocando
+   `COLE_A_ANON_KEY` pela anon key do projeto (Project Settings > API).
+2. `supabase functions deploy fluxo-notificar` (os secrets `VAPID_*` são do
+   projeto, os mesmos do Faltas; se o Faltas já notifica, não precisa setar de
+   novo).
+3. Publicar o app (versão já subida em `js/app.js` e `sw.js`).
 
 ---
 
@@ -512,6 +538,12 @@ defesa real do banco continua sendo o **RLS**.
 
 Para criar/remover usuários ou trocar a chave do Supabase: abra `admin.html`,
 gere o novo `js/usuarios.js` e publique.
+
+O botão **Salvar usuarios.js** grava por cima do arquivo (Chrome/Edge no PC):
+no 1º clique escolha `js/usuarios.js` da pasta do app; a escolha fica guardada
+no navegador e os próximos cliques gravam direto, sem perguntar o local.
+**Escolher outro arquivo** refaz a escolha. Em navegador sem essa função
+(Firefox, Safari, celular) o botão volta a só baixar o arquivo.
 
 ---
 
