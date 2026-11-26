@@ -30,7 +30,8 @@ window.ModuloKits = (function () {
 
   var CACHE_MS = 20000;          /* leitura de uma aba */
   var CACHE_ABAS_MS = 300000;    /* lista de abas (muda raramente) */
-  var AUTO_MS = 30000;           /* releitura automática com a lista na tela */
+  var CACHE_TODAS_MS = 60000;    /* busca universal: retrato de todas as semanas */
+  var AUTO_MS = 30000;          /* releitura automática com a lista na tela */
   var SYNC_ATRASADA_MS = 600000; /* espelho sem sincronizar ha mais de 10 min = aviso */
 
   var MESES = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
@@ -304,7 +305,9 @@ window.ModuloKits = (function () {
       catalogo: null, catT: 0, sobras: null, sobT: 0, sobBusca: '',
       sobCarregando: false, sobErro: '', sobOcupado: false, sobAlvo: '',
       /* cargas que ainda podem receber o kit aberto na janela da sobra */
-      sobDest: null
+      sobDest: null,
+      /* busca universal: linhas de todas as semanas, por aba */
+      todas: null, todasT: 0, todasCarregando: false, todasErro: false
     };
     var cacheAba = {};
     var tDigita = null, tBusca = null;
@@ -376,6 +379,51 @@ window.ModuloKits = (function () {
         cacheAba[aba] = e;
         aplicarCache(e);
       });
+    }
+
+    /* busca universal: lê todas as semanas (1 consulta paginada) e guarda
+       decorado por aba; só roda quando há texto na busca */
+    function garantirTodas(forcar) {
+      if (estado.todasCarregando) return;
+      if (!forcar && estado.todas && cacheValido(estado.todasT, Date.now(), CACHE_TODAS_MS)) return;
+      estado.todasCarregando = true;
+      Promise.resolve().then(function () { return nv().kitsLerTodas(); }).then(function (rows) {
+        var porAba = {};
+        (rows || []).forEach(function (r) { (porAba[r.aba] = porAba[r.aba] || []).push(r); });
+        var todas = {};
+        Object.keys(porAba).forEach(function (a) {
+          todas[a] = decorar(porAba[a]).map(function (l) { l.aba = a; return l; });
+        });
+        estado.todas = todas;
+        estado.todasT = Date.now();
+        estado.todasErro = false;
+      }, function () {
+        estado.todasErro = true;
+      }).then(function () {
+        estado.todasCarregando = false;
+        if (estado.busca) renderLista();
+      });
+    }
+
+    /* linhas de uma aba para a busca universal: a aba aberta vem de
+       estado.linhas; as outras, do cache da aba se for mais novo que o
+       retrato de todas as semanas */
+    function linhasDaAba(a) {
+      if (a === estado.aba) return estado.linhas || [];
+      var c = cacheAba[a];
+      var base = (c && c.t >= estado.todasT) ? c.linhas : ((estado.todas && estado.todas[a]) || []);
+      return base.map(function (l) { return l.aba === a ? l : Object.assign({}, l, { aba: a }); });
+    }
+
+    /* abre o kit de outra semana: troca a aba e, lida, abre o detalhe/separar */
+    function irParaKit(aba, linha, separar) {
+      var abrir = function () { if (separar) abrirSeparar(linha); else abrirDetalhe(linha); };
+      if (aba === estado.aba && estado.linhas) { abrir(); return; }
+      if (estado.carregando) return;
+      estado.aba = aba;
+      estado.linhas = null;
+      estado.faltas = {};
+      carregar(false).then(function () { if (estado.aba === aba) abrir(); });
     }
 
     function carregar(forcar) {
@@ -702,7 +750,8 @@ window.ModuloKits = (function () {
     }
 
     function htmlLinha(l, pode) {
-      var fs = faltasDe(l);
+      /* faltas só são conhecidas para a aba aberta */
+      var fs = (!l.aba || l.aba === estado.aba) ? faltasDe(l) : [];
       var seq = l.total > 1 ? ' <span class="kit-seq">' + l.seq + '/' + l.total + '</span>' : '';
       var faltaTxt = '';
       if (fs.length) {
@@ -717,6 +766,7 @@ window.ModuloKits = (function () {
         : '<span class="badge kit-badge ' + l.estado + '">' + labelEstado(l.estado) + '</span>';
       /* kit aguardando ainda não pode ser aberto */
       var dataKit = l.estado === 'aguardando' ? '' : ' data-kit="' + l.linha + '"';
+      if (l.aba) dataKit += ' data-aba="' + esc(l.aba) + '"';
       return '<div class="li kit-li ' + l.estado + '"' + dataKit + '>' +
         '<div class="li-main">' +
           '<div class="li-nome">' + htmlNomeMaquina(l.produto || '(sem produto)') + seq + '</div>' +
@@ -737,22 +787,50 @@ window.ModuloKits = (function () {
         el.innerHTML = vazio(estado.erro || 'Toque em Atualizar para ler a planilha.');
         return;
       }
-      if (!estado.linhas.length) { el.innerHTML = vazio('Esta aba não tem linhas de kit.'); return; }
-
-      var itens = filtrar(estado.linhas, {
+      var pode = podeEditar();
+      var f = {
         estado: estado.filtro, busca: estado.busca,
         extra: function (l) { return kitsDaLinha(l).map(function (k) { return 'kit ' + k; }).join(' '); }
-      });
-      if (!itens.length) { el.innerHTML = vazio('Nenhum kit com esse filtro.'); return; }
+      };
+      function htmlGrupos(itens, todas) {
+        return agruparPorCarga(itens, todas).map(function (g) {
+          return '<div class="section-title kit-grupo">' +
+              '<span>' + esc(g.carga) + '</span>' +
+              '<span class="kit-grupo-cont">' + g.separados + '/' + g.total + ' separados</span>' +
+            '</div>' +
+            '<div class="list">' + g.itens.map(function (l) { return htmlLinha(l, pode); }).join('') + '</div>';
+        }).join('');
+      }
 
-      var pode = podeEditar();
-      el.innerHTML = agruparPorCarga(itens, estado.linhas).map(function (g) {
-        return '<div class="section-title kit-grupo">' +
-            '<span>' + esc(g.carga) + '</span>' +
-            '<span class="kit-grupo-cont">' + g.separados + '/' + g.total + ' separados</span>' +
-          '</div>' +
-          '<div class="list">' + g.itens.map(function (l) { return htmlLinha(l, pode); }).join('') + '</div>';
-      }).join('');
+      /* com texto na busca: procura em todas as semanas, não só na aberta */
+      if (norm(estado.busca)) {
+        garantirTodas(false);
+        var ordem = [estado.aba].concat(estado.abas.filter(function (a) { return a !== estado.aba; }));
+        if (estado.todas) Object.keys(estado.todas).forEach(function (a) { if (ordem.indexOf(a) < 0) ordem.push(a); });
+        var html = '', achados = 0, LIMITE = 300;
+        ordem.forEach(function (a) {
+          if (achados >= LIMITE) return;
+          var todasAba = linhasDaAba(a);
+          var itensAba = filtrar(todasAba, f);
+          if (!itensAba.length) return;
+          if (achados + itensAba.length > LIMITE) itensAba = itensAba.slice(0, LIMITE - achados);
+          achados += itensAba.length;
+          html += '<div class="section-title kit-aba-grupo"><span>' + esc(a) + '</span></div>' +
+            htmlGrupos(itensAba, todasAba);
+        });
+        var nota = '';
+        if (estado.todasCarregando && !estado.todas) nota = 'Buscando nas outras semanas...';
+        else if (estado.todasErro && !estado.todas) nota = 'Não foi possível buscar nas outras semanas.';
+        else if (achados >= LIMITE) nota = 'Mostrando os primeiros ' + LIMITE + ' resultados. Refine a busca.';
+        if (!achados) { el.innerHTML = vazio(nota || 'Nenhum kit com esse filtro em nenhuma semana.'); return; }
+        el.innerHTML = html + (nota ? '<p class="muted small">' + esc(nota) + '</p>' : '');
+        return;
+      }
+
+      if (!estado.linhas.length) { el.innerHTML = vazio('Esta aba não tem linhas de kit.'); return; }
+      var itens = filtrar(estado.linhas, f);
+      if (!itens.length) { el.innerHTML = vazio('Nenhum kit com esse filtro.'); return; }
+      el.innerHTML = htmlGrupos(itens, estado.linhas);
     }
 
     /* =========================================================
@@ -1727,7 +1805,10 @@ window.ModuloKits = (function () {
         t.addEventListener('click', function () { P.mostrarView(t.dataset.view); });
       });
 
-      $(id + 'Atualizar').addEventListener('click', function () { carregar(true); });
+      $(id + 'Atualizar').addEventListener('click', function () {
+        if (norm(estado.busca)) garantirTodas(true);
+        carregar(true);
+      });
 
       /* atualização automática: a cada AUTO_MS e ao voltar para a aba do navegador */
       setInterval(autoAtualizar, AUTO_MS);
@@ -1759,10 +1840,15 @@ window.ModuloKits = (function () {
       });
 
       $(id + 'Lista').addEventListener('click', function (ev) {
+        /* na busca universal o item pode ser de outra semana (data-aba) */
         var s = ev.target.closest('[data-kit-sep]');
-        if (s) { abrirSeparar(Number(s.getAttribute('data-kit-sep'))); return; }
+        if (s) {
+          var as = s.closest('[data-aba]');
+          irParaKit(as ? as.getAttribute('data-aba') : estado.aba, Number(s.getAttribute('data-kit-sep')), true);
+          return;
+        }
         var r = ev.target.closest('[data-kit]');
-        if (r) abrirDetalhe(Number(r.getAttribute('data-kit')));
+        if (r) irParaKit(r.getAttribute('data-aba') || estado.aba, Number(r.getAttribute('data-kit')), false);
       });
 
       $(id + 'HistLista').addEventListener('click', function (ev) {

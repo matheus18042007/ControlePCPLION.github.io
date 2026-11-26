@@ -883,6 +883,23 @@ var Nuvem = (function () {
     });
   }
 
+  /* busca universal: todas as linhas de todas as abas, [{aba,linha,carga,produto,almoxFrente,kit}] */
+  function kitsLerTodas() {
+    return puxarPaginado('/kits_linhas?select=aba,linha,carga,produto,almox_frente,kit&order=aba,linha')
+      .then(function (r) {
+        return (r || []).map(function (x) {
+          return {
+            aba: x.aba,
+            linha: x.linha,
+            carga: x.carga == null ? '' : x.carga,
+            produto: x.produto,
+            almoxFrente: x.almox_frente === true,
+            kit: x.kit === true
+          };
+        });
+      });
+  }
+
   /* a RPC valida contra o espelho e levanta excecao com texto proprio;
      os casos "planilha mudou / kit nao liberado" viram status 409, que o
      kits.js trata relendo a lista */
@@ -1100,6 +1117,7 @@ var Nuvem = (function () {
     push: push,
     kitsAbas: kitsAbas,
     kitsLer: kitsLer,
+    kitsLerTodas: kitsLerTodas,
     kitsSeparar: kitsSeparar,
     kitsHistorico: kitsHistorico,
     kitsCatalogo: kitsCatalogo,
