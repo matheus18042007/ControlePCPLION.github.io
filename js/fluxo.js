@@ -16,10 +16,10 @@ window.ModuloFluxo = (function () {
   /* ordem do fluxo da fábrica (cor fixa por setor nos gráficos) */
   var SETORES = [
     { k: 'corte', n: 'Corte', c: '#ff8a1f' },
+    { k: 'pre_montagem', n: 'Pré-montagem', c: '#28c76f' },
     { k: 'solda', n: 'Solda', c: '#ffc542' },
     { k: 'banho', n: 'Banho', c: '#4dabf7' },
     { k: 'pintura', n: 'Pintura', c: '#b197fc' },
-    { k: 'pre_montagem', n: 'Pré-montagem', c: '#28c76f' },
     { k: 'montagem_final', n: 'Montagem final', c: '#ff6b9a' }
   ];
   var COR_OUTRO = '#8fa3b8';
