@@ -5,7 +5,7 @@
 (function () {
 'use strict';
 
-var APP_VERSION = '3.1';
+var APP_VERSION = '3.7';
 
 /* ---------------------------------------------------------
    Atalhos DOM
@@ -1365,7 +1365,21 @@ function ligarEventos() {
 --------------------------------------------------------- */
 function registrarSW() {
   if (!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.register('./sw.js').then(function (reg) {
+  /* primeira instalacao nao precisa recarregar; so troca de versao */
+  var tinhaVersao = !!navigator.serviceWorker.controller;
+  /* updateViaCache 'none': o sw.js nunca vem do cache HTTP, entao a
+     versao nova e vista assim que o GitHub Pages publica */
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(function (reg) {
+    /* procura versao nova ao voltar para o app e a cada 15 min aberto */
+    var procurar = function () { reg.update().catch(function () {}); };
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') procurar();
+    });
+    setInterval(function () {
+      if (document.visibilityState === 'visible') procurar();
+    }, 15 * 60 * 1000);
+    /* versao nova que ficou esperando de uma visita anterior */
+    if (reg.waiting && tinhaVersao) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
     reg.addEventListener('updatefound', function () {
       var novo = reg.installing;
       if (!novo) return;
@@ -1376,10 +1390,10 @@ function registrarSW() {
         }
       });
     });
-  }).catch(function () {});
+  }).catch(function (e) { console.warn('[app] service worker nao registrado', e); });
   var recarregou = false;
   navigator.serviceWorker.addEventListener('controllerchange', function () {
-    if (recarregou) return;
+    if (recarregou || !tinhaVersao) return;
     recarregou = true;
     location.reload();
   });

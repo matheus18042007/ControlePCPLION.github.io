@@ -673,7 +673,7 @@ var Nuvem = (function () {
         /* o vinculo do modulo Kits nao tem FK: limpa em melhor esforco
            para nao sobrar badge de falta ja excluida */
         if (modulo === 'faltas') {
-          kitsFaltaDesvincular(id).then(null, function () {});
+          kitsFaltaDesvincular(id).then(null, function (e) { console.warn('[nuvem] desvincular kit da falta ' + id + ' falhou', e); });
         }
         return r;
       });

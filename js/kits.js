@@ -432,7 +432,7 @@ window.ModuloKits = (function () {
       estado.carregando = true;
       estado.erro = '';
       renderLista();
-      try { garantirCatalogo(); } catch (e0) {}
+      try { garantirCatalogo(); } catch (e0) { console.warn('[kits] catalogo', e0); }
       estado.promessa = carregarAbas(!!forcar).then(function (abas) {
         estado.abas = abas;
         if (!abas.length) {
@@ -1556,7 +1556,7 @@ window.ModuloKits = (function () {
             var desfazer = (novo.qtd - qtd >= 1)
               ? F.editarExterno({ id: novo.id, codigo: novo.codigo, nome: novo.nome, qtd: novo.qtd - qtd, almox: novo.almox })
               : F.excluirExterno({ id: novo.id });
-            return desfazer.then(null, function () {}).then(function () { throw e; });
+            return desfazer.then(null, function (e3) { console.warn('[kits] nao desfez a soma na falta ' + novo.id, e3); }).then(function () { throw e; });
           });
         }).then(function () {
           return gravarQtd(String(novo.id));

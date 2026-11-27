@@ -105,12 +105,29 @@ var Auth = (function () {
       .catch(function () { throw new Error('Usuário ou senha inválidos.'); });
   }
 
+  /* Recarrega js/usuarios.js da rede antes do login: usuario cadastrado
+     ou senha trocada no admin vale na hora, sem reabrir o app. Sem sinal
+     (ou demorando), segue com o cofre que ja esta carregado. */
+  function recarregarCofre() {
+    return new Promise(function (resolve) {
+      var s = document.createElement('script');
+      var fim = function () { clearTimeout(t); if (s.parentNode) s.parentNode.removeChild(s); resolve(); };
+      var t = setTimeout(fim, 4000);
+      s.onload = fim;
+      s.onerror = fim;
+      s.src = './js/usuarios.js?v=' + Date.now();
+      document.head.appendChild(s);
+    });
+  }
+
   /* ---------- login ---------- */
   function entrar(login, senha, lembrar) {
     if (!disponivel()) {
       return Promise.reject(new Error('Este navegador não permite criptografia (abra o app por HTTPS).'));
     }
-    return destrancar(login, senha).then(function (r) {
+    return recarregarCofre().then(function () {
+      return destrancar(login, senha);
+    }).then(function (r) {
       return decifrar(r.mestra, cofre().cfg).then(function (buf) {
         var cfg = JSON.parse(new TextDecoder().decode(buf));
         sessao = { login: r.usuario.login, nome: r.usuario.nome || r.usuario.login, cfg: cfg };
@@ -121,23 +138,45 @@ var Auth = (function () {
   }
 
   /* A sessao aberta guarda a config ja decifrada. Com "lembrar",
-     fica no aparelho ate clicar em Sair; sem, morre ao fechar a aba. */
+     fica no aparelho por VALIDADE_LEMBRAR (ou ate clicar em Sair);
+     sem, morre ao fechar a aba. */
+  var VALIDADE_LEMBRAR = 30 * 24 * 60 * 60 * 1000; // 30 dias
+
+  function gravarLembrada(dados, expira) {
+    var p = { login: dados.login, nome: dados.nome, cfg: dados.cfg, expira: expira };
+    localStorage.setItem(CHAVE_SESSAO, JSON.stringify(p));
+  }
+
   function guardarSessao(lembrar) {
-    var pacote = JSON.stringify(sessao);
     try {
-      if (lembrar) localStorage.setItem(CHAVE_SESSAO, pacote);
-      else sessionStorage.setItem(CHAVE_SESSAO, pacote);
+      if (lembrar) gravarLembrada(sessao, Date.now() + VALIDADE_LEMBRAR);
+      else sessionStorage.setItem(CHAVE_SESSAO, JSON.stringify(sessao));
     } catch (e) {}
   }
 
   function restaurar() {
     if (sessao) return sessao;
-    var bruto = null;
-    try { bruto = sessionStorage.getItem(CHAVE_SESSAO) || localStorage.getItem(CHAVE_SESSAO); } catch (e) {}
+    var bruto = null, daAba = false;
+    try {
+      bruto = sessionStorage.getItem(CHAVE_SESSAO);
+      daAba = !!bruto;
+      if (!bruto) bruto = localStorage.getItem(CHAVE_SESSAO);
+    } catch (e) {}
     if (!bruto) return null;
     try {
       var s = JSON.parse(bruto);
-      if (s && s.login && s.cfg) sessao = s;
+      if (!s || !s.login || !s.cfg) return null;
+      if (!daAba) {
+        if (typeof s.expira !== 'number') {
+          /* sessao lembrada antes da validade existir: comeca a contar agora,
+             para ninguem ser deslogado no dia da atualizacao */
+          try { gravarLembrada(s, Date.now() + VALIDADE_LEMBRAR); } catch (e) {}
+        } else if (Date.now() > s.expira) {
+          try { localStorage.removeItem(CHAVE_SESSAO); } catch (e) {}
+          return null;
+        }
+      }
+      sessao = { login: s.login, nome: s.nome, cfg: s.cfg };
     } catch (e) { sessao = null; }
     return sessao;
   }

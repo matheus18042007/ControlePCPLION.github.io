@@ -105,7 +105,7 @@ window.ModuloFaltas = (function () {
         try {
           db.run('ALTER TABLE faltas ADD COLUMN almoxarifado TEXT NOT NULL DEFAULT "frente"');
           salvar(true);
-        } catch (e) {}
+        } catch (e) { console.warn('[faltas] migracao almoxarifado falhou', e); }
       }
     }
 
@@ -134,7 +134,7 @@ window.ModuloFaltas = (function () {
     var ouvintes = [];
     function avisarMudanca(tipo) {
       ouvintes.slice().forEach(function (cb) {
-        try { cb({ tipo: tipo }); } catch (e) {}
+        try { cb({ tipo: tipo }); } catch (e) { console.error('[faltas] ouvinte aoMudar falhou', e); }
       });
     }
 

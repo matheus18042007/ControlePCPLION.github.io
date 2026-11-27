@@ -1025,7 +1025,7 @@ window.ModuloContagem = (function () {
       if (!TEM_FOTO || !cadFotoMudou) return;
       var url = cadFoto;
       cadFotoMudou = false;
-      idbSet(IDB, 'foto_' + codigo, url || null).catch(function () {});
+      idbSet(IDB, 'foto_' + codigo, url || null).catch(function (e) { console.warn('[contagem] foto local nao salva', e); });
       if (estado.itemAtual && estado.itemAtual.codigo === codigo) mostrarFoto(url);
       var api = nv();
       if (!api) { toast('Foto ficou só neste aparelho (sem nuvem)', 'err'); return; }
@@ -1037,9 +1037,9 @@ window.ModuloContagem = (function () {
     /* item excluído -> foto vai junto (local e nuvem) */
     function apagarFotoDoItem(codigo) {
       if (!TEM_FOTO) return;
-      idbSet(IDB, 'foto_' + codigo, null).catch(function () {});
+      idbSet(IDB, 'foto_' + codigo, null).catch(function (e) { console.warn('[contagem] foto local nao apagada', e); });
       var api = nv();
-      if (api) api.apagarFoto(codigo).catch(function () {});
+      if (api) api.apagarFoto(codigo).catch(function (e) { console.warn('[contagem] foto do item ' + codigo + ' ficou na nuvem', e); });
     }
 
     function salvarCadastro() {

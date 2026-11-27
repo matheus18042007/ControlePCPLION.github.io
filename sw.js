@@ -8,7 +8,7 @@
    Para publicar uma atualização: mudar CACHE_VERSION abaixo.
    ============================================================ */
 
-var CACHE_VERSION = 'pcp-lion-v3.3';
+var CACHE_VERSION = 'pcp-lion-v3.7';
 
 var ARQUIVOS = [
   './',
@@ -29,6 +29,7 @@ var ARQUIVOS = [
   './js/fluxo.js',
   './js/banco.js',
   './js/app.js',
+  './js/admin.js',
   './vendor/sql-wasm.js',
   './vendor/sql-wasm.wasm',
   './vendor/html5-qrcode.min.js',
@@ -97,6 +98,35 @@ self.addEventListener('notificationclick', function (e) {
   );
 });
 
+/* Busca na rede; se a rede falhar, ou demorar mais de 4 s com sinal
+   fraco, entrega o cache. A resposta da rede só vai para o cache se
+   vier OK (não guarda página de erro 404 no lugar do arquivo). */
+function redeComFallback(url, chave, modoCache, ehHtml) {
+  return new Promise(function (resolve) {
+    var entregue = false;
+    var entregar = function (r) { if (!entregue && r) { entregue = true; resolve(r); } };
+    var doCache = function () {
+      return caches.match(chave, { ignoreSearch: true }).then(function (r) {
+        if (r || !ehHtml) return r;
+        return caches.match('./index.html');
+      });
+    };
+    var timer = setTimeout(function () { doCache().then(entregar); }, 4000);
+
+    fetch(url, { cache: modoCache, credentials: 'same-origin' }).then(function (resp) {
+      clearTimeout(timer);
+      if (resp.ok) {
+        var copia = resp.clone();
+        caches.open(CACHE_VERSION).then(function (c) { return c.put(chave, copia); }).catch(function (e) { console.warn('[sw] cache nao gravado: ' + chave, e); });
+      }
+      entregar(resp);
+    }).catch(function () {
+      clearTimeout(timer);
+      doCache().then(function (r) { entregar(r || Response.error()); });
+    });
+  });
+}
+
 self.addEventListener('fetch', function (e) {
   var req = e.request;
   if (req.method !== 'GET') return;
@@ -104,33 +134,28 @@ self.addEventListener('fetch', function (e) {
   var url = new URL(req.url);
   if (url.origin !== location.origin) return;
 
-  // HTML / navegação e o cofre de usuários -> network-first
-  // (o cofre muda toda vez que um usuário é cadastrado; não pode
-  //  ficar preso no cache até a próxima versão do app)
+  // HTML, cofre de usuários e código do app (js/css) -> network-first.
+  // O cofre muda toda vez que um usuário é cadastrado, e o código muda
+  // a cada publicação: com sinal, sempre vem o arquivo novo, mesmo se
+  // esquecer de mudar o CACHE_VERSION. Sem sinal, abre pelo cache.
   var ehCofre = url.pathname.indexOf('/js/usuarios.js') > -1;
   var ehHtml = req.mode === 'navigate' ||
                (req.headers.get('accept') || '').indexOf('text/html') > -1;
+  var ehCodigo = url.pathname.indexOf('/vendor/') === -1 &&
+                 /\.(js|css|html|json)$/.test(url.pathname);
 
-  if (ehHtml || ehCofre) {
-    /* 'no-store' fura o cache HTTP do navegador/CDN (o GitHub Pages
-       serve com max-age, entao 'network-first' sozinho ainda entregava
-       o cofre antigo por varios minutos depois de publicar). */
-    e.respondWith(
-      fetch(req.url, { cache: 'no-store', credentials: 'same-origin' }).then(function (resp) {
-        var copia = resp.clone();
-        caches.open(CACHE_VERSION).then(function (c) { c.put(req, copia); });
-        return resp;
-      }).catch(function () {
-        return caches.match(req).then(function (r) {
-          if (r) return r;
-          return ehHtml ? caches.match('./index.html') : Response.error();
-        });
-      })
-    );
+  if (ehHtml || ehCofre || ehCodigo) {
+    /* 'no-store' fura o cache HTTP do navegador/CDN no HTML e no cofre;
+       o resto revalida ('no-cache': 304 quando nada mudou, bem leve).
+       O cofre é guardado sempre na mesma chave (o login pede ele com
+       ?v=... para furar o cache, sem encher o cache de cópias). */
+    var chave = ehCofre ? './js/usuarios.js' : req;
+    e.respondWith(redeComFallback(req.url, chave,
+      (ehHtml || ehCofre) ? 'no-store' : 'no-cache', ehHtml));
     return;
   }
 
-  // Estáticos -> cache-first
+  // Bibliotecas (vendor/) e ícones -> cache-first
   e.respondWith(
     caches.match(req).then(function (cacheado) {
       if (cacheado) return cacheado;

@@ -133,7 +133,7 @@ window.ModuloEficiencia = (function () {
         } catch (e) { return; }
         if (!tem) {
           try { db.run('ALTER TABLE ' + t + ' ADD COLUMN ordem INTEGER NOT NULL DEFAULT 0'); }
-          catch (e2) {}
+          catch (e2) { console.warn('[eficiencia] migracao ordem falhou em ' + t, e2); }
         }
       });
     }

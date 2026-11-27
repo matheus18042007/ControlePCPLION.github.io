@@ -33,6 +33,9 @@ o outro.
 3. se for do tipo `contagem`, **nada mais precisa ser escrito** — o motor
    genérico `js/contagem.js` monta tela e banco a partir do `cfg`.
 
+O passo a passo completo, com as regras de segurança, está em
+[Criar um módulo novo com segurança](#criar-um-módulo-novo-com-segurança).
+
 ### Janelas no PC
 
 Em tela larga (a partir de 900 px) os formulários e detalhes abrem como **janela
@@ -547,14 +550,171 @@ no navegador e os próximos cliques gravam direto, sem perguntar o local.
 
 ---
 
+## Criar um módulo novo com segurança
+
+Desde a versão 3.7 o banco está fechado: a chave anon (pública, fica no
+navegador) **não pode gravar em nenhuma tabela nova** a não ser que você libere.
+Siga esta ordem.
+
+### 1. Tela (front)
+
+1. `index.html`: criar as `<section class="view" data-modulo="xxx">` e os
+   `<button class="tab" data-modulo="xxx">`;
+2. `js/modulos.js`: registrar em `MODULOS` (`id`, `nome`, `desc`, `icone`,
+   `titulo`, `viewInicial`, `pronto`). Se for contagem, usar `tipo: 'contagem'`
+   e parar aqui no front;
+3. se o módulo tiver código próprio, criar `js/xxx.js` e:
+   - incluir com `<script src="./js/xxx.js"></script>` no `index.html`, antes
+     de `js/app.js`;
+   - incluir `'./js/xxx.js'` em `ARQUIVOS` no `sw.js` (senão não funciona offline);
+4. regras de código:
+   - **nunca** usar `<script>` inline, `onclick="..."`, `eval` ou
+     `new Function`: a regra de segurança (CSP) do `index.html` e do
+     `admin.html` bloqueia. Use `addEventListener` dentro do `js/xxx.js`;
+   - todo texto que vem do banco, da planilha ou do usuário e vai para
+     `innerHTML` passa por `esc()` (`js/app.js`). Para texto puro, prefira
+     `textContent`;
+   - nada de `catch (e) {}` vazio: no mínimo
+     `catch (e) { console.warn('[xxx] o que falhou', e); }`;
+   - chamadas ao Supabase passam por `Nuvem` (`js/nuvem.js`), nunca por
+     `fetch` solto com a chave.
+
+### 2. Domínio externo novo
+
+Se o módulo chamar um site que não seja o Supabase ou o Google Apps Script,
+adicionar o endereço em `connect-src` da tag
+`<meta http-equiv="Content-Security-Policy">` **nos dois arquivos**
+(`index.html` e `admin.html`). Sem isso o navegador bloqueia a chamada e mostra
+erro no console (F12).
+
+### 3. Banco (Supabase)
+
+Criar um arquivo `supabase/patch_xxx.sql` idempotente (pode rodar mais de uma
+vez: `create table if not exists`, `create or replace function`,
+`drop policy if exists`). Modelo:
+
+```sql
+begin;
+
+create table if not exists public.xxx_itens (
+  id          bigint generated always as identity primary key,
+  codigo      text not null unique,          -- unique evita duplicado
+  qtd         numeric not null default 0 check (qtd >= 0),
+  usuario     text,
+  aparelho    text,
+  atualizado_em timestamptz not null default now()
+);
+
+-- RLS sempre ligado. Leitura liberada, escrita NAO.
+alter table public.xxx_itens enable row level security;
+revoke insert, update, delete, truncate, references, trigger
+  on public.xxx_itens from anon, authenticated;
+drop policy if exists xxx_itens_ler on public.xxx_itens;
+create policy xxx_itens_ler on public.xxx_itens
+  for select to anon, authenticated using (true);
+
+-- Escrita só por funcao, que valida tudo.
+create or replace function public.xxx_gravar(p_codigo text, p_qtd numeric,
+  p_usuario text default null, p_aparelho text default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp           -- obrigatorio em security definer
+as $$
+declare v_row public.xxx_itens;
+begin
+  if coalesce(trim(p_codigo), '') = '' then raise exception 'Codigo vazio'; end if;
+  if p_qtd is null or p_qtd < 0 then raise exception 'Quantidade invalida'; end if;
+
+  -- trava a linha: dois aparelhos gravando ao mesmo tempo nao se atropelam
+  select * into v_row from public.xxx_itens where codigo = p_codigo for update;
+
+  insert into public.xxx_itens (codigo, qtd, usuario, aparelho)
+  values (trim(p_codigo), p_qtd, p_usuario, p_aparelho)
+  on conflict (codigo) do update
+    set qtd = excluded.qtd, usuario = excluded.usuario,
+        aparelho = excluded.aparelho, atualizado_em = now()
+  returning * into v_row;
+
+  return jsonb_build_object('ok', true, 'qtd', v_row.qtd);
+end $$;
+
+revoke all on function public.xxx_gravar(text,numeric,text,text) from public;
+grant execute on function public.xxx_gravar(text,numeric,text,text) to anon, authenticated;
+
+commit;
+notify pgrst, 'reload schema';
+```
+
+Regras do banco:
+
+- **RLS ligado em toda tabela**, e nunca criar política `for all ... using (true)`
+  (ela libera tudo e anula as outras);
+- gravação pelo app = **função** (`rpc`) com `security definer` +
+  `set search_path = public, pg_temp`, validando cada parâmetro;
+- toda função começa com `revoke all ... from public` e só depois o `grant`
+  para quem precisa. Função interna (que o app não chama) não leva `grant`;
+- função que **apaga** ou **zera** dados precisa de confirmação no parâmetro
+  ou de um segredo, nunca só "anon pode chamar";
+- leitura + escrita na mesma linha usa `select ... for update` (ou um
+  `update ... set qtd = qtd + x` direto), para dois celulares não se
+  sobrescreverem;
+- `unique` e `check` na tabela, não só no JavaScript;
+- views novas com `with (security_invoker = true)`;
+- SQL nunca leva senha, chave `service_role` nem chave real: use
+  placeholder (`COLE_A_ANON_KEY`) e cole a chave só no SQL Editor.
+
+Depois de rodar o patch, rode `supabase/diagnostico_seguranca.sql` e confira:
+a tabela nova deve aparecer com `anon_insert=false anon_update=false
+anon_delete=false`, e a função com `config=search_path=public, pg_temp`.
+
+### 4. Edge Function (se precisar)
+
+- segredos (`SUPABASE_SERVICE_ROLE_KEY`, chaves VAPID, Google) só em
+  **Edge Functions > Secrets**, lidos com `Deno.env.get`. Nunca no repositório;
+- se o segredo obrigatório faltar, a função responde erro claro em vez de
+  quebrar;
+- respeitar `ALLOWED_ORIGINS` (mesmo padrão de `faltas-notificar` e
+  `fluxo-notificar`) e aceitar só os valores esperados (lista fixa de
+  módulos, números com limite);
+- para quem chamou devolver só `"Falha no servidor"`/contagens; o detalhe do
+  erro vai para `console.error` (logs da função).
+
+### 5. Permissão de edição
+
+Se o módulo tiver ações de edição restritas, adicionar o `id` em
+`MODULOS_COM_EDICAO` (`js/auth.js`) e marcar quem pode editar no `admin.html`.
+Lembrete: isso esconde botões na tela, **não** é segurança. A proteção real é
+a função do banco.
+
+### 6. Checklist antes de publicar
+
+- [ ] `node --check js/xxx.js` sem erro;
+- [ ] arquivo novo em `ARQUIVOS` no `sw.js`;
+- [ ] F12 > Console sem aviso vermelho de "Content-Security-Policy";
+- [ ] patch SQL rodado e `diagnostico_seguranca.sql` conferido;
+- [ ] nenhuma chave/senha em arquivo do repositório (`.gitignore` já exclui
+      `supabase/.temp/`, `.playwright-cli/`, `.claude/settings.local.json`);
+- [ ] versão atualizada (abaixo).
+
+---
+
 ## Publicar uma atualização
 
 1. mudar `APP_VERSION` em `js/app.js`;
-2. mudar `CACHE_VERSION` em `sw.js` (mesmo número, ex. `pcp-lion-v2.9.6`);
+2. mudar `CACHE_VERSION` em `sw.js` para o **mesmo número**
+   (ex. `APP_VERSION = '3.8'` e `CACHE_VERSION = 'pcp-lion-v3.8'`);
 3. se criou arquivo novo, adicionar em `ARQUIVOS` no `sw.js`;
 4. commit + push (GitHub Pages).
 
-Sem trocar o `CACHE_VERSION` os celulares continuam com a versão antiga em cache.
+Atualização automática (desde a 3.7): o app procura versão nova ao abrir, ao
+voltar para a tela e a cada 15 minutos. Achando, instala e recarrega sozinho.
+O `index.html`, o `admin.html` e o `js/usuarios.js` (cofre) vêm sempre da rede
+quando há internet, então usuário novo ou senha trocada valem na hora, sem
+esperar o cache.
+
+Sem trocar o `CACHE_VERSION` os arquivos JS/CSS continuam os antigos nos
+celulares.
 
 Teste local: `python -m http.server 8080` e abrir `http://localhost:8080`
 (precisa ser servido por HTTP — a câmera e o Service Worker não funcionam em
